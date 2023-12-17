@@ -1,0 +1,16 @@
+{
+  "name": "node-server",
+  "version": "1.0.0",
+  "description": "Node.js server with Socket.io and HTTPS",
+  "main": "ioserver.js",
+  "scripts": {
+    "start": "node ioserver.js"
+  },
+  "author": "Myky",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.17.1",
+    "socket.io": "^4.0.0",
+    "https": "^1.0.0"
+  }
+}
