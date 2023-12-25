@@ -10,17 +10,19 @@ import { GridHelper } from 'three';
 import e from 'cors';
 import { update } from 'lodash';
 
+
 class GOL extends React.Component {
     constructor(props) {
         super(props);
         THREE.Object3D.DefaultUp = new THREE.Vector3(0,0,1);
         const scene = new THREE.Scene();
         this.container = React.createRef();
-        const camera =  new THREE.PerspectiveCamera( 70, this.container.scrollWidth / this.container.scrollWidth, 0.01, 2000 );
+        const camera =  new THREE.PerspectiveCamera( 70, this.container.scrollWidth / this.container.scrollWidth, 0.01, 256 );
+        //const camera =  new THREE.PerspectiveCamera( 70, this.container.scrollWidth / this.container.scrollWidth, 0.01, 256 );
         camera.position.y = 0;
         camera.position.z = 25;
         camera.position.x = 0;
-        camera.layers.enable( 2 );
+        camera.layers.enable( 1 );
         camera.up.set(0,0,1);
         camera.updateMatrix();
         camera.updateProjectionMatrix();
@@ -31,11 +33,12 @@ class GOL extends React.Component {
         const controls = new MapControls( this.camera, renderer.domElement );
         controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
         controls.dampingFactor = 0.25;
-        //controls.screenSpacePanning = false;
-        controls.minDistance = 5;
-        controls.maxDistance = 250;
+        controls.screenSpacePanning = false;
+        controls.minDistance = 4;
+        controls.maxDistance = 128;
         controls.enablePan = false;
         controls.maxPolarAngle = Math.PI / 2 - 0.9;
+
         controls.update();
         this.controls = controls;
 
@@ -74,7 +77,7 @@ class GOL extends React.Component {
             },
             hexSize:1.0,
             hexSize2D: 80,
-            HexShapeCountRound: 25,
+            HexShapeCountRound: this.props.healpixProps.detail || 6,
             hexOrigin: {
                 x: 0,
                 y:0
@@ -104,10 +107,10 @@ class GOL extends React.Component {
         this.raycaster = new THREE.Raycaster();
         this.pointer = new THREE.Vector2();
 
-        let stats = new Stats();
-        this.stats = stats;
-        this.stats.showPanel( 0 ); // 0: fps, 1: ms, 2: mb, 3+: custom
-        document.body.appendChild( this.stats.dom );
+        //let stats = new Stats();
+        //this.stats = stats;
+        //this.stats.showPanel( 0 ); // 0: fps, 1: ms, 2: mb, 3+: custom
+        //document.body.appendChild( this.stats.dom );
 
         this.state.scene.background = new THREE.Color().set('#795548');
         this.state.scene.fog = new THREE.Fog( this.state.scene.background, 200, 1000 );
@@ -173,7 +176,6 @@ class GOL extends React.Component {
     Cube = (x, y, z) => {
         return {x: x, y: y, z: z}
     }
-
 
     flat_hex_corner = (center, i) => {
         var angle_deg = 60*i;
@@ -252,7 +254,6 @@ class GOL extends React.Component {
         return this.Cube(x, y, z)
     }
 
-
     cube_to_oddq = (c) => {
         var q = c.q
         var r = c.r + (c.q - (c.q&1)) / 2;
@@ -298,19 +299,6 @@ class GOL extends React.Component {
         return this.Cube(rx, ry, rz)
     }
 
-    cubeDir = (dir) => {
-        var cubeDir = [ this.Cube(+1, 0, -1), this.Cube(+1, -1, 0), this.Cube(0, -1, +1), this.Cube(-1, 0, +1), this.Cube(-1, +1, 0), this.Cube(0, +1, -1) ];
-        return cubeDir[dir];
-    }
-
-    cubeAdd = (a, b) => {
-        return this.Cube(a.x + b.x, a.y + b.y, a.z + b.z)
-    }
-
-    cubeNeighbor = (c, dir) => {
-        return this.cubeAdd(c, this.cubeDir(dir))
-    }
-
     findNeighbors = (c) => {
         let neigbors = [];
         for(var i=0; i<6; i++){
@@ -323,6 +311,7 @@ class GOL extends React.Component {
         return neigbors;
     }
 
+    
     cubeDistance = (a, b) =>{
         return (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + Math.abs(a.z - b.z)) / 2;
     }
@@ -370,43 +359,6 @@ class GOL extends React.Component {
         return activeNeighbors;
     };
 
-
-    // findActiveNeighbors = (cube) => {
-    //     const roundRadius = this.state.HexShapeCountRound; // Предполагается, что размер поля хранится в состоянии
-    //     const neighbors = this.findNeighbors(cube);
-    
-    //     const activeNeighbors = neighbors.filter(neighborCube => {
-    //         // Проверяем, находится ли сосед на границе поля
-    //         let wrappedQ = neighborCube.q;
-    //         let wrappedR = neighborCube.r;
-    //         let wrappedS = neighborCube.s;
-    
-    //         if (wrappedQ < 0 || wrappedQ >= roundRadius) {
-    //             wrappedQ = (wrappedQ + roundRadius) % roundRadius;
-    //         }
-    //         if (wrappedR < 0 || wrappedR >= roundRadius) {
-    //             wrappedR = (wrappedR + roundRadius) % roundRadius;
-    //         }
-    //         if (wrappedS < 0 || wrappedS >= roundRadius) {
-    //             wrappedS = (wrappedS + roundRadius) % roundRadius;
-    //         }
-    
-    //         // Находим шестиугольник с возможно корректированными координатами
-    //         const neighborCell = this.state.cellsMap.find(cell =>
-    //             cell.cube.coordinates.q === wrappedQ &&
-    //             cell.cube.coordinates.r === wrappedR &&
-    //             cell.cube.coordinates.s === wrappedS
-    //         );
-    
-    //         return neighborCell && neighborCell.cube.state;
-    //     });
-    
-    //     return activeNeighbors;
-    // };
-        
-    
-
-
     generateGradientMaterials = (startColor, endColor, numberOfMaterials) => {
         const materials = [];
       
@@ -424,115 +376,114 @@ class GOL extends React.Component {
         return materials;
     }
  
-        ///GPT FUNCTIONS
-        updateLabelsToFaceUp = (labels) => {
+    ///GPT FUNCTIONS
+    updateLabelsToFaceUp = (labels) => {
+        const up = new THREE.Vector3(0, 0, 1); // Вектор "верх" мира
+        labels.forEach((label) => {
+            label.quaternion.setFromUnitVectors(label.up, up);
+        });
+        };
+
+    createTextSprite = (message, fontColor = '#ffffff', fontSize = 48) => {
+        // Создаем элемент canvas
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+
+        // Устанавливаем размер канваса
+        canvas.width = 64;  // Уменьшенный размер канваса
+        canvas.height = 64; // Уменьшенный размер канваса
+
+        // Настройка шрифта для отображения текста
+        context.fillStyle = '#ffffff'; // Устанавливаем цвет шрифта
+        context.font = `${fontSize}px Arial`;
+        context.textAlign = 'center';
+        context.textBaseline = 'upper';
+        context.clearRect(0, 0, canvas.width, canvas.height); // Очистка канваса перед рисованием текста
+        context.fillText(message, canvas.width / 2, canvas.height / 2);
+
+        // Создаем текстуру из канваса
+        const texture = new THREE.Texture(canvas);
+        texture.needsUpdate = true; // Обновляем текстуру
+
+        // Создаем материал для спрайта с заданным цветом текста
+        const material = new THREE.SpriteMaterial({ map: texture });
+
+        // Создаем спрайт и масштабируем его
+        const sprite = new THREE.Sprite(material);
+        const scale = 0.0075; // Масштаб спрайта в соответствии с размером гексагона
+        sprite.scale.set(scale * canvas.width, scale * canvas.height, 1);
+        //sprite.center.set(0, 0); // Turn off billboarding
+        return sprite;
+    };
+    
+
+    positionLabel = (cell, axis, label, distance = 0.5) => {
+        const angle = Math.PI / 3; // 60 градусов в радианах для шестиугольника
+        const offsetAngle = -(Math.PI / 6); // Дополнительные 30 градусов в радианах
+        let offset;
+    
+        switch(axis) {
+            case 'q':
+                offset = new THREE.Vector3(Math.cos(angle * 2 + offsetAngle), Math.sin(angle * 2 + offsetAngle), 0).multiplyScalar(distance);
+                label.material.color.setHex(0x59b300); // красный цвет для оси Q
+                break;
+            case 'r':
+                offset = new THREE.Vector3(Math.cos(offsetAngle), Math.sin(offsetAngle), 0).multiplyScalar(distance);
+                label.material.color.setHex(0x0099e6); // зеленый цвет для оси R
+                break;
+            case 's':
+                offset = new THREE.Vector3(Math.cos(angle * 4 + offsetAngle), Math.sin(angle * 4 + offsetAngle), 0).multiplyScalar(distance);
+                label.material.color.setHex(0xe619e5); // Синий цвет для оси S
+                break;
+            default:
+                offset = new THREE.Vector3(0, 0, 0.5);
+                break;
+        }
+    
+        label.position.copy(cell.position).add(offset); // Позиционируем метку над гексом
+        //label.lookAt(cell.position); // Направляем метку в сторону центра гекса
+    };
+    
+
+    addLabelsToHexagons = () => {
+        // Предполагается, что шестиугольники и сцена уже инициализированы
+        this.gridGroup.children.forEach(cell => {
+            const qLabel = this.createTextSprite(`q: ${cell.cube.coordinates.q}`, `'#59b300'`, 20);
+            const rLabel = this.createTextSprite(`r: ${cell.cube.coordinates.r}`, `'#0099e6'`, 20);
+            const sLabel = this.createTextSprite(`s: ${cell.cube.coordinates.s}`, `'#e619e5'`, 20);
+    
+            this.positionLabel(cell, 'q', qLabel);
+            this.positionLabel(cell, 'r', rLabel);
+            this.positionLabel(cell, 's', sLabel);
+            
+            this.labelsArray.push(qLabel);
+            this.labelsArray.push(rLabel);
+            this.labelsArray.push(sLabel);
+
+        });
+        this.state.scene.add(...this.labelsArray);
+        this.labelsArray.forEach((label) => {
             const up = new THREE.Vector3(0, 0, 1); // Вектор "верх" мира
-            labels.forEach((label) => {
-              label.quaternion.setFromUnitVectors(label.up, up);
-            });
-          };
-    
-        createTextSprite = (message, fontColor = '#ffffff', fontSize = 48) => {
-            // Создаем элемент canvas
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-    
-            // Устанавливаем размер канваса
-            canvas.width = 64;  // Уменьшенный размер канваса
-            canvas.height = 64; // Уменьшенный размер канваса
-    
-            // Настройка шрифта для отображения текста
-            context.fillStyle = '#ffffff'; // Устанавливаем цвет шрифта
-            context.font = `${fontSize}px Arial`;
-            context.textAlign = 'center';
-            context.textBaseline = 'upper';
-            context.clearRect(0, 0, canvas.width, canvas.height); // Очистка канваса перед рисованием текста
-            context.fillText(message, canvas.width / 2, canvas.height / 2);
-    
-            // Создаем текстуру из канваса
-            const texture = new THREE.Texture(canvas);
-            texture.needsUpdate = true; // Обновляем текстуру
-    
-            // Создаем материал для спрайта с заданным цветом текста
-            const material = new THREE.SpriteMaterial({ map: texture });
-    
-            // Создаем спрайт и масштабируем его
-            const sprite = new THREE.Sprite(material);
-            const scale = 0.0075; // Масштаб спрайта в соответствии с размером гексагона
-            sprite.scale.set(scale * canvas.width, scale * canvas.height, 1);
-            //sprite.center.set(0, 0); // Turn off billboarding
-            return sprite;
-        };
-        
-    
-        positionLabel = (cell, axis, label, distance = 0.5) => {
-            const angle = Math.PI / 3; // 60 градусов в радианах для шестиугольника
-            const offsetAngle = -(Math.PI / 6); // Дополнительные 30 градусов в радианах
-            let offset;
-        
-            switch(axis) {
-                case 'q':
-                    offset = new THREE.Vector3(Math.cos(angle * 2 + offsetAngle), Math.sin(angle * 2 + offsetAngle), 0).multiplyScalar(distance);
-                    label.material.color.setHex(0x59b300); // красный цвет для оси Q
-                    break;
-                case 'r':
-                    offset = new THREE.Vector3(Math.cos(offsetAngle), Math.sin(offsetAngle), 0).multiplyScalar(distance);
-                    label.material.color.setHex(0x0099e6); // зеленый цвет для оси R
-                    break;
-                case 's':
-                    offset = new THREE.Vector3(Math.cos(angle * 4 + offsetAngle), Math.sin(angle * 4 + offsetAngle), 0).multiplyScalar(distance);
-                    label.material.color.setHex(0xe619e5); // Синий цвет для оси S
-                    break;
-                default:
-                    offset = new THREE.Vector3(0, 0, 0.5);
-                    break;
-            }
-        
-            label.position.copy(cell.position).add(offset); // Позиционируем метку над гексом
-            //label.lookAt(cell.position); // Направляем метку в сторону центра гекса
-        };
-        
-    
-        addLabelsToHexagons = () => {
-            // Предполагается, что шестиугольники и сцена уже инициализированы
-            this.gridGroup.children.forEach(cell => {
-              const qLabel = this.createTextSprite(`q: ${cell.cube.coordinates.q}`, `'#59b300'`, 20);
-              const rLabel = this.createTextSprite(`r: ${cell.cube.coordinates.r}`, `'#0099e6'`, 20);
-              const sLabel = this.createTextSprite(`s: ${cell.cube.coordinates.s}`, `'#e619e5'`, 20);
-        
-              this.positionLabel(cell, 'q', qLabel);
-              this.positionLabel(cell, 'r', rLabel);
-              this.positionLabel(cell, 's', sLabel);
-                
-              this.labelsArray.push(qLabel);
-              this.labelsArray.push(rLabel);
-              this.labelsArray.push(sLabel);
-    
-            });
-            this.state.scene.add(...this.labelsArray);
-            this.labelsArray.forEach((label) => {
-                const up = new THREE.Vector3(0, 0, 1); // Вектор "верх" мира
-                label.quaternion.setFromUnitVectors(label.up, up);
-            });
-          }
-    
-        removeLabelsFromHexagons = () => {
-            // Ваша логика удаления меток
-            if (this.labelsArray) {
-              this.labelsArray.forEach(label => {
-                this.state.scene.remove(label);
-              });
-              this.labelsArray = []; // Очищаем массив с метками
-            }
-        }  
-
-
-    statistics = () => {
-        console.log("Scene polycount:", this.state.renderer.info.render.triangles)
-        console.log("Active Drawcalls:", this.state.renderer.info.render.calls)
-        console.log("Textures in Memory", this.state.renderer.info.memory.textures)
-        console.log("Geometries in Memory", this.state.renderer.info.memory.geometries)
+            label.quaternion.setFromUnitVectors(label.up, up);
+        });
     }
+
+    removeLabelsFromHexagons = () => {
+        // Ваша логика удаления меток
+        if (this.labelsArray) {
+            this.labelsArray.forEach(label => {
+            this.state.scene.remove(label);
+            });
+            this.labelsArray = []; // Очищаем массив с метками
+        }
+    }  
+
+    // statistics = () => {
+    //     console.log("Scene polycount:", this.state.renderer.info.render.triangles)
+    //     console.log("Active Drawcalls:", this.state.renderer.info.render.calls)
+    //     console.log("Textures in Memory", this.state.renderer.info.memory.textures)
+    //     console.log("Geometries in Memory", this.state.renderer.info.memory.geometries)
+    // }
 
     componentDidMount() {
         this.interval = null;
@@ -546,11 +497,11 @@ class GOL extends React.Component {
             this.updateScreenSize();
         }
         window.addEventListener("resize", this.updateScreenSize);
-        //window.addEventListener("keyup", this.keyup, false);
+        window.addEventListener("keyup", this.keyup, false);
         window.addEventListener('mousedown', this.handleMouseDown, false);
         window.addEventListener('mousemove', this.handleMouseMove, false);
         window.addEventListener('mouseup', this.handleMouseUp, false);
-
+        //window.addEventListener('onMouseOver', this.handleMouseUp, false);
 
         // Задаем начальный и конечный цвета
         const startColor = 0x30D5C8; // Turquoise
@@ -562,32 +513,21 @@ class GOL extends React.Component {
         // gradientMaterials теперь содержит массив из 10 материалов с градиентом цвета
         //console.log(this.gradientMaterials);
 
-        // 0x30d5c8
-        // 0x44cdbe
-        // 0x59c6b5
-        // 0x6ebfab
-        // 0x83b7a2
-        // 0x97b098
-        // 0xaca98f
-        // 0xc1a185
-        // 0xd69a7c
-        // 0xeb9373
-
         this.hexMaterialActive = new THREE.MeshBasicMaterial({ color: 0x483720 });
-        this.hexMaterialActive1 = new THREE.MeshBasicMaterial({ color: 0x483720 });
-        this.hexMaterialActive2 = new THREE.MeshBasicMaterial({ color: 0x483720 });
-        this.hexMaterialActive3 = new THREE.MeshBasicMaterial({ color: 0x483720 });
-        this.hexMaterialActive4 = new THREE.MeshBasicMaterial({ color: 0x483720 });
-        this.hexMaterialActive5 = new THREE.MeshBasicMaterial({ color: 0x483720 });
-        this.hexMaterialActive6 = new THREE.MeshBasicMaterial({ color: 0x483720 });
+        this.hexMaterialActive2 = new THREE.MeshBasicMaterial({ color: 0xF64F00 });
+        this.hexMaterialActive3 = new THREE.MeshBasicMaterial({ color: 0xDD405E });
+        this.hexMaterialActive1 = new THREE.MeshBasicMaterial({ color: 0x083E54 });
+        this.hexMaterialActive4 = new THREE.MeshBasicMaterial({ color: 0x004140 }); 
+        
         
         this.hexMaterialInactive = new THREE.MeshBasicMaterial({ color: 0xDD9045 });
+        this.hexMaterialHighlight = new THREE.MeshBasicMaterial({ color: 0x44ff44 });
         this.start();
         this.initialGrid = this.createInitialGrid();
         //this.updateGeneration();
         //this.updateGrid(this.initialGrid);
-        this.worker = new Worker('.workers/lifeGameWorker.js');
-        this.worker.onmessage = this.handleWorkerMessage;
+        // this.worker = new Worker('./workers/GameWorker.js');
+        // this.worker.onmessage = this.handleWorkerMessage;
 
     };
 
@@ -596,11 +536,11 @@ class GOL extends React.Component {
         this.setState({ cellsMap: newCellsMap });
       }
     
-    updateFieldState = () => {
-        if (this.worker) {
-            this.worker.postMessage(this.state.cellsMap);
-        }
-    }
+    // updateFieldState = () => {
+    //     if (this.worker) {
+    //         this.worker.postMessage(this.state.cellsMap);
+    //     }
+    // }
       
     componentDidUpdate(prevProps) {
         // Только если isGenocide изменился с false на true и функция не была вызвана ранее
@@ -643,21 +583,29 @@ class GOL extends React.Component {
               });
             
         }
+        if(this.props.healpixProps.detail !== prevProps.healpixProps.detail){
+            this.setState({ HexShapeCountRound: this.props.healpixProps.detail }, () => {
+                // Вызываем handleGenocide только после установки состояния
+                this.handleRing();
+              });
+        }
     }
 
     componentWillUnmount() {
         window.removeEventListener("resize", this.updateScreenSize);
-        //window.removeEventListener("keyup", this.keyup, false);
+        window.removeEventListener("keyup", this.keyup, false);
         window.removeEventListener('mousedown', this.handleMouseDown, false);
         window.removeEventListener('mousemove', this.handleMouseMove, false);
         window.removeEventListener('mouseup', this.handleMouseUp, false);
-        // ... остальные обработчики
+        //window.removeEventListener('onMouseOver', this.handleMouseUp, false);
+        
+        // ... остальные обработчики        
+
         this.container.removeChild(this.state.renderer.domElement)
         //this.cleanup();
         this.stopUpdateCycle(); // Очистка при размонтировании компонента
         this.removeLabelsFromHexagons()
     }
-
 
     createHexagonShape(size) {
         const shape = new THREE.Shape();
@@ -707,6 +655,7 @@ class GOL extends React.Component {
                 }
                 cube.stateUpdated = false;
                 cube.coordinates = { q: q, r: r, s: s };
+                cube.roundCoordinates = this.cubeRound(this.Cube(q, r, s));
                 cube.position = { x: cube.x, y: cube.y, z: cube.z };
                 cube.name = `cube_${q}_${r}_${s}`;
                 // Создаем mesh для шестиугольника
@@ -714,22 +663,98 @@ class GOL extends React.Component {
                 hexMesh.position.set(cube.x, cube.y, 0.1);
                 hexMesh.name = `cell_${q}_${r}_${s}`;
                 hexMesh.cube = cube;
-                hexMesh.scale.set(0.987, 0.987, 1); // Уменьшаем размер шестиугольника, чтобы избежать перекрытия
+                hexMesh.scale.set(0.97, 0.97, 1); // Уменьшаем размер шестиугольника, чтобы избежать перекрытия
                 this.gridGroup.add(hexMesh);
                 newCellsMap.push(hexMesh); // Добавляем mesh во временный массив
                 //grid.push(hexMesh);
             }
         }
         // Обновляем состояние с новым массивом шестиугольников
+        //console.log(newCellsMap);
         this.setState({ cellsMap: newCellsMap });
 
         // Добавляем группу на сцену
         this.state.scene.add(this.gridGroup);
-        //console.log(this.state.cellsMap);
+        
 
         // Возвращаем группу, если нам нужно взаимодействовать с ней позже
         //return this.gridGroup;
     };
+
+    handleRing = () => {
+        // Создаем временный массив для хранения новых состояний    
+    this.reinitializeGrid(true); 
+         
+    }     
+
+    reinitializeGrid = (addRing) => {
+        const oldGridRadius = this.state.HexShapeCountRound;
+        const newGridRadius = addRing ? oldGridRadius + 1 : oldGridRadius - 1;
+
+        // Create a temporary array to store the new hexagons
+        const newCellsMap = [];
+
+        // Iterate through the hexagons in the old grid
+        for (let q = -newGridRadius; q <= newGridRadius; q++) {
+            for (let r = -newGridRadius; r <= newGridRadius; r++) {
+                const s = -q - r;
+                if (Math.abs(s) > newGridRadius) continue;
+
+                // Check if the hexagon exists in the old grid
+                const existingHexagon = this.state.cellsMap.find(
+                    (cell) => cell.cube.coordinates.q === q && cell.cube.coordinates.r === r
+                );
+
+                // If the hexagon exists, add it to the new grid
+                if (existingHexagon) {
+                    newCellsMap.push(existingHexagon);
+                }
+                // If the hexagon doesn't exist, create a new one
+                else {
+                    const cube = this.hexToPosition(q, r);
+                    cube.state = Math.random() < 0.5;
+                    cube.lifeTime = cube.state ? 1 : 0;
+                    cube.stateUpdated = false;
+                    cube.coordinates = { q: q, r: r, s: s };
+                    cube.roundCoordinates = this.cubeRound(this.Cube(q, r, s));
+                    cube.position = { x: cube.x, y: cube.y, z: cube.z };
+                    cube.name = `cube_${q}_${r}_${s}`;
+
+                    const hexMesh = new THREE.Mesh(
+                        this.createHexagonShape(this.state.hexSize),
+                        cube.state ? this.hexMaterialActive : this.hexMaterialInactive
+                    );
+                    hexMesh.position.set(cube.x, cube.y, 0.1);
+                    hexMesh.name = `cell_${q}_${r}_${s}`;
+                    hexMesh.cube = cube;
+                    hexMesh.scale.set(0.97, 0.97, 1);
+
+                    newCellsMap.push(hexMesh);
+                }
+            }
+        }
+
+        // Update the grid radius in the state
+        this.setState({ HexShapeCountRound: newGridRadius });
+
+        // Update the cells map in the state
+        this.setState({ cellsMap: newCellsMap });
+
+        // Remove the old grid group from the scene
+        this.state.scene.remove(this.gridGroup);
+
+        // Clear the old grid group
+        this.gridGroup.children = [];
+
+        // Add the new hexagons to the grid group
+        newCellsMap.forEach((hexMesh) => {
+            this.gridGroup.add(hexMesh);
+        });
+
+        // Add the grid group back to the scene
+        this.state.scene.add(this.gridGroup);
+    };
+
 
     handleGenocide = () => {
 
@@ -764,7 +789,7 @@ class GOL extends React.Component {
         let maxLifetime = 0;
         // Первый проход для определения новых состояний
         this.state.cellsMap.forEach(cell => {
-            let nextState = Math.random() < 0.5;
+            let nextState = Math.random() < 0.137;
             if(nextState){
                 cell.cube.lifeTime = 1;
             } else {
@@ -777,7 +802,8 @@ class GOL extends React.Component {
         const newCellsMap = this.state.cellsMap.map(cell => {
           const nextState = newStates.get(cell.cube.name);
           if (cell.cube.state !== nextState) {
-            cell.cube.state = nextState;    
+            cell.cube.state = nextState;
+            //console.log(cell.cube.lifeTime);    
             //cell.material = this.gradientMaterials[cell.cube.lifeTime]; // Изменяем материал шестиугольника в за������исимости от lifeTime
             cell.material = nextState ? this.hexMaterialActive : this.hexMaterialInactive;
             cell.material.needsUpdate = true;
@@ -792,8 +818,8 @@ class GOL extends React.Component {
 
     startUpdateCycle = () => {
         // Устанавливаем интервал для регулярного вызова updateFieldState
-        this.interval = setInterval(this.updateFieldState, 142); // Например, каждую секунду
-      }
+        this.interval = setInterval(this.updateFieldState, 120); // Например, каждую секунду
+    }
     
     stopUpdateCycle = () => {
         // Очищаем интервал
@@ -804,44 +830,33 @@ class GOL extends React.Component {
     updateFieldState = () => {
         // Создаем временный массив для хранения новых состояний
         const newStates = new Map();
-        let maxLifetime = 0;
+        //let maxLifetime = 0;
         // Первый проход для определения новых состояний
         this.state.cellsMap.forEach(cell => {
+            //const lifeTime = cell.cube.lifeTime;
             const activeNeighbors = this.findActiveNeighbors(cell.cube).length;
             const currentlyActive = cell.cube.state;
             let nextState = currentlyActive;
+            //let nextLifeTime = lifeTime;
 
             // if (currentlyActive && (activeNeighbors < 2 || activeNeighbors >= 3)) { // Если активный и у него меньше 2 или больше 3 соседей, он становится неактивным
             //     nextState = false;
-            //     } else if (!currentlyActive && activeNeighbors === 3) { // Если неактивный и у него 3 соседа, он становится активным
+            //     } else if (!currentlyActive && activeNeighbors === 2) { // Если неактивный и у него 3 соседа, он становится активным
             //     nextState = true;
             // }   
             if (currentlyActive) {
                 // Если клетка живая (активная)
                 if (activeNeighbors === 3 || activeNeighbors === 4) {
-                    // Остается живой, если у нее 3 или 4 живых соседа
                     nextState = true;
-                    cell.lifeTime += 1; // Инкрементируем lifeTime
                 } else {
-                    // В противном случае становится мертвой (неактивной)
                     nextState = false;
-                    cell.lifeTime = 0; // Сброс lifeTime, так как клетка умирает
                 }
             } else {
-                // Если клетка мертвая (неактивная)
                 if (activeNeighbors === 2) {
-                    // Оживает, если у нее ровно 2 живых соседа
                     nextState = true;
-                    cell.lifeTime = 1; // Устанавливаем lifeTime в 1, так как клетка только что ожила
                 } else {
-                    // В противном случае остается мертвой (неактивной)
                     nextState = false;
-                    // Здесь не трогаем lifeTime, так как клетка остается мертвой
                 }
-            }
-
-            if (cell.cube.lifeTime > maxLifetime) {
-                maxLifetime = cell.cube.lifeTime;
             }
             newStates.set(cell.cube.name, nextState);
         });
@@ -850,16 +865,16 @@ class GOL extends React.Component {
         const newCellsMap = this.state.cellsMap.map(cell => {
           const nextState = newStates.get(cell.cube.name);
           if (cell.cube.state !== nextState) {
-            cell.cube.state = nextState;    
-            //cell.material = this.gradientMaterials[cell.cube.lifeTime]; // Изменяем материал шестиугольника в зависимости от lifeTime
+            cell.cube.state = nextState;
             cell.material = nextState ? this.hexMaterialActive : this.hexMaterialInactive;
             cell.material.needsUpdate = true;
+
           }
           return cell;
         });
         // Обновляем состояние всего один раз
         this.setState({ cellsMap: newCellsMap });
-        //console.log('Generation end, Max lifetime:', maxLifetime);
+        ///console.log('Generation end, Max lifetime:', maxLifetime);
     };
     
 
@@ -882,26 +897,15 @@ class GOL extends React.Component {
     }
 
     animate = () => {
-        this.stats.begin();
+        //this.stats.begin();
         this.delta = this.clock.getDelta();
         this.timer = Date.now() * 0.01;
         this.renderScene(this.delta);
-        this.stats.end();
+        //this.stats.end();
         this.frameId = window.requestAnimationFrame(this.animate);
     }
 
-    // /**
-    //  * Handles key press events.
-    //  * @param {Event} event - The key press event.
-    //  */
-    // handleKeyPress = (event) => {
-    //     if (event.key === 'k' || event.key === 'K') {
-    //         this.clearGeneration();
-    //         this.setState({ isPlay: false });
-    //         this.playing = false;
-    //     }
-    // };
-
+    
     ////Все что ниже работает как нужно... вроде бы... пока
 
     handleMouseDown = (e)   => {
@@ -934,13 +938,17 @@ class GOL extends React.Component {
         const x = e.clientX - rect.left; // x position within the element.
         const y = e.clientY - rect.top;  // y position within the element.
         // Вычисляем эффективную высоту канваса, исключая панель управления и футер
-        const effectiveHeight = rect.height - 50 - 24; // 50 пикселей сверху и 24 пикселя снизу
+        const effectiveHeight = rect.height ; // 50 пикселей сверху и 24 пикселя снизу
 
         const mouse = new THREE.Vector2(
             (x / rect.width) * 2 - 1,
-            - ((y - 50) / effectiveHeight) * 2 + 1 // Вычитаем высоту панели управления из y перед вычислением
+            - (y / rect.height) * 2 + 1 // Вычитаем высоту панели управления из y перед вычислением
         );
-    
+    //console.log(mouse.x, mouse.y);
+        if (rect.height < 256) {
+        // Если мышь за пределами канваса, выходим из функции
+            return;
+        }
         this.raycaster.setFromCamera(mouse, this.camera);
     
         // Проверяем, есть ли пересечение с детьми группы шестиугольников

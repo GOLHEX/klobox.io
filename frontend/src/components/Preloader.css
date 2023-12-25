@@ -1,0 +1,40 @@
+.preloader {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #EDEEF0;
+  font-family: 'Lilita One', sans-serif;
+  position: relative;
+}
+
+.loading-text, .loading-text-shadow {
+  font-size: 10em;
+  font-weight: bold;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  user-select: none;
+}
+
+.loading-text-shadow {
+  /* Тени в стиле нейроморфизма */
+  text-shadow: 
+    2px 2px 5px rgba(0, 0, 0, 1.0), /* Внешняя тень */
+    inset 0px 2px 4px rgba(255, 255, 255, 1.0), /* Внутренняя светлая тень сверху */
+    inset 0px -3px 6px rgba(0, 0, 0, 1.0); /* Внутренняя тень снизу */
+  color: #b0bbbb; /* Цвет текста для отображения теней */
+  z-index: 1;
+}
+
+.loading-text {
+  color: transparent;
+  background: linear-gradient(to bottom, #0078d7 100%, transparent 0%);
+  background-repeat: no-repeat;
+  background-size: 100% 0%;
+  background-position: 0 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  z-index: 2;
+}
