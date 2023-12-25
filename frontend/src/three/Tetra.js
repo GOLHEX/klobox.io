@@ -18,10 +18,9 @@ import HEALPiX from './healpix';
 import W from "../wrapper/W"
 import { Material } from "three";
 //import { randInt } from "./three/src/math/mathutils";
-import { randFloat, randInt } from "./three.js/src/math/MathUtils";
+//import { randFloat, randInt } from "./three.js/src/math/MathUtils";
 // import { VertexNormalsHelper } from 'three';
 // import { VertexTangentsHelper } from 'three';
-
 
 
 class Tetra extends Component {

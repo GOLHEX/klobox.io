@@ -5,12 +5,12 @@ import MetaMaskSDK from '@metamask/sdk';
 import Tetra from "./Tetra"
 import GOL from "./GameOfLife"
 import W from "../wrapper/W"
-
 import './Env.css'
 
 class Env extends Component {
   constructor(props) {
     super(props);
+    this.socket = null; // Add this line to initialize the socket variable
     this.handleClick = this.handleClick.bind(this);
     this.userPos = this.userPos.bind(this);
     this.lastPose = { x: '15', y: '15' };
@@ -40,17 +40,16 @@ class Env extends Component {
                   '#607D8B'
                 ]
     };
-   
 
-    this.socket = io.connect(this.state.endpoint)
-    //this.socket = 'io()'
-    //
-    if(this.socket){
-      this.socket.on('userPos', (data) => {
-        console.log(data);
-      });
-    }
+ }
 
+
+  componentDidMount() {
+    this.socket = io.connect(this.state.endpoint); // Uncomment this line to connect to the endpoint
+  }
+
+  componentWillUnmount() {  
+    this.socket.disconnect();
   }
 
   handleClick() {

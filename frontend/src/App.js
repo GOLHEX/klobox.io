@@ -1,17 +1,15 @@
-import React, { Component, useState } from "react"
-import Env from "./three/Env"
-import W from "./wrapper/W"
-//import ThreeScene from "./three/ThreeScene"
-import GOL from "./three/GameOfLife"
-import Play from "./components/Play"
-import Genocide from "./components/Genocide"
-import Populate from "./components/Populate"
-import ValueToggleButton from "./components/ValueToggleButton"
-import Labels from "./components/Labels"
-import './App.css'
-
-
-
+import React, { Component } from "react";
+import Env from "./three/Env";
+import W from "./wrapper/W";
+import GOL from "./three/GameOfLife";
+import Play from "./components/Play";
+import Preloader from "./components/Preloader"; // Убедитесь, что импортирован правильно
+import Next from "./components/Next";
+import Genocide from "./components/Genocide";
+import Populate from "./components/Populate";
+import ValueToggleButton from "./components/ValueToggleButton";
+import Labels from "./components/Labels";
+import './App.css';
 
 class App extends Component {
   constructor(props){
@@ -19,30 +17,25 @@ class App extends Component {
     this.state = {
       healpixProps: {
         radius: 2,
-        detail: 1
+        detail: 6
       },
       isPlay: false,
+      isNext: false,
       isGenocide: false,
       isPopulate: false,
       isLabeled: false,
+      isLoading: true, // Добавлено состояние для прелоадера
     };
-    //this._playClick = this._playClick.bind(this);
   }
+
   authenticate(){
-    return new Promise(resolve => setTimeout(resolve, 2000))
+    return new Promise(resolve => setTimeout(resolve, 3000));
   }
+
   componentDidMount(){
     this.authenticate().then(() => {
-      const ele = document.getElementById('preloader')
-      if(ele){
-        // fade out
-        ele.classList.add('available')
-        setTimeout(() => {
-          // remove from DOM
-          ele.outerHTML = ''
-        }, 200)
-      }
-    })
+      this.setState({ isLoading: false }); // Убрать прелоадер после аутентификации
+    });
   }
 
   handleDetailChange = (newDetail) => {
@@ -62,10 +55,9 @@ class App extends Component {
         isPlay: newValue,
     }));
   }
-
   isGenocideChange = () => {
     // Логика очистки поля шестиугольников
-    
+
     this.setState(prevState => ({
         ...prevState.isGenocide,
         isGenocide: true,
@@ -100,47 +92,54 @@ class App extends Component {
         isLabeled: newValue,
     }));
   }
-  componentWillUnmount() {
-
-  }
   render() {
+    const { isLoading } = this.state;
     const headerStyle = {
         display: "flex",
-        //alignItems: "flex-end",
         alignItems: "center",
         justifyContent: "center"
     };
+
+    // Если приложение все еще загружается, показать прелоадер
+    if (isLoading) {
+      return <Preloader />;
+    }
+
+    // Основной интерфейс приложения отображается, когда isLoading === false
     return (
       <div className="App">
-            <div className="App-header"
-            style={headerStyle}
-            >
-                <Play
-                  isPlayChange={this.isPlayChange}
-                  isPlayInit={this.state.isPlay}
-                />
-                <Genocide isGenocideChange={this.isGenocideChange} />
-                <Populate isPopulateChange={this.isPopulateChange} />
-                <ValueToggleButton
-                  initialValue={this.state.healpixProps.detail}
-                  minValue={0}
-                  maxValue={5}
-                  step={1}
-                  onValueChange={this.handleDetailChange}
-                />
-                {/* <Labels 
-                  isLabeledInit={this.state.isLabeled}
-                  isLabeledChange={this.isLabeledChange}
-                /> */}
-            </div>
-        <Env  healpixProps={this.state.healpixProps} isPlay={this.state.isPlay} isGenocide={this.state.isGenocide} isPopulate={this.state.isPopulate} isLabeled={this.state.isLabeled} />
-
+        <div className="App-header" style={headerStyle}>
+        <Play
+          isPlayChange={this.isPlayChange}
+          isPlayInit={this.state.isPlay}
+        />
+        <Genocide isGenocideChange={this.isGenocideChange} />
+        <Populate isPopulateChange={this.isPopulateChange} />
+        <ValueToggleButton
+          initialValue={this.state.healpixProps.detail}
+          minValue={0}
+          maxValue={55}
+          step={1}
+          onValueChange={this.handleDetailChange}
+        />
+        <Labels 
+          isLabeledInit={this.state.isLabeled}
+          isLabeledChange={this.isLabeledChange}
+        /> 
+        </div>
+        <Env
+          healpixProps={this.state.healpixProps}
+          isPlay={this.state.isPlay}
+          isGenocide={this.state.isGenocide}
+          isPopulate={this.state.isPopulate}
+          isLabeled={this.state.isLabeled}
+        />
         <div className="App-footer">
-            GNA
+          GNA
         </div>
       </div>
-    )
+    );
   }
 }
-export default App;
 
+export default App;

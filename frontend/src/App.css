@@ -19,7 +19,7 @@
 
 .App-intro {
   position: relative;
-  background-color: #f87f73;
+  background-color: #3b3b3b;
   margin: 0px;
 }
 
@@ -45,9 +45,9 @@
 }
 
 .sub {
-  background-color: #f87f73;
-  background-image: -webkit-linear-gradient( -28deg, #f87f73 0%, #f87f73 50%, #292423 50%, #292423 50%);
-  background-image: linear-gradient( -28deg, #f87f73 0%, #f87f73 50%, #292423 50%, #292423 50%);
+  background-color: #3b3b3b;
+  background-image: -webkit-linear-gradient( -28deg, #3b3b3b 0%, #3b3b3b 50%, #292423 50%, #292423 50%);
+  background-image: linear-gradient( -28deg, #3b3b3b 0%, #3b3b3b 50%, #292423 50%, #292423 50%);
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
@@ -76,7 +76,7 @@
 
 .App-intro {
   position: relative;
-  background-color: #f87f73;
+  background-color: #3b3b3b;
   margin: 0px;
 }
 
@@ -104,9 +104,9 @@
 }
 
 .sub {
-  background-color: #f87f73;
-  background-image: -webkit-linear-gradient( -28deg, #f87f73 0%, #f87f73 50%, #292423 50%, #292423 50%);
-  background-image: linear-gradient( -28deg, #f87f73 0%, #f87f73 50%, #292423 50%, #292423 50%);
+  background-color: #3b3b3b;
+  background-image: -webkit-linear-gradient( -28deg, #3b3b3b 0%, #3b3b3b 50%, #292423 50%, #292423 50%);
+  background-image: linear-gradient( -28deg, #3b3b3b 0%, #3b3b3b 50%, #292423 50%, #292423 50%);
 }
 
 .App-footer {
@@ -128,8 +128,8 @@
 
 .sub {
 
-    background-color: #f87f73;
-    background-image: -webkit-linear-gradient( -28deg, #f87f73 0%, #f87f73 50%, #292423 50%, #292423 50%);
-    background-image: linear-gradient( -28deg, #f87f73 0%, #f87f73 50%, #292423 50%, #292423 50%);
+    background-color: #3b3b3b;
+    background-image: -webkit-linear-gradient( -28deg, #3b3b3b 0%, #3b3b3b 50%, #292423 50%, #292423 50%);
+    background-image: linear-gradient( -28deg, #3b3b3b 0%, #3b3b3b 50%, #292423 50%, #292423 50%);
 }
 
