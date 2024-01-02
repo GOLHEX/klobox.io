@@ -82,7 +82,7 @@ class Env extends Component {
 
       //<Tetra io={this.socket} onClick={this.handleClick} userPos={this.userPos} usercolor="blue" />
       //<Tetra io={this.socket} onClick={this.handleClick} userPos={this.userPos} usercolor="blue" healpixProps={this.props.healpixProps} isPlay={this.props.isPlay} />
-      <GOL className="GOL" io={this.socket} onClick={this.handleClick} healpixProps={this.props.healpixProps} isPlay={this.props.isPlay} isGenocide={this.props.isGenocide} isPopulate={this.props.isPopulate}  isLabeled={this.props.isLabeled} userPos={this.userPos} usercolor="blue" />
+      <GOL className="GOL" io={this.socket} onClick={this.handleClick} healpixProps={this.props.healpixProps} isPlay={this.props.isPlay} isGenocide={this.props.isGenocide} isCameraRot={this.props.isCameraRot} isPopulate={this.props.isPopulate}  isLabeled={this.props.isLabeled} userPos={this.userPos} usercolor="blue" />
 
     )
   }

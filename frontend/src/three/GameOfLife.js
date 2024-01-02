@@ -49,6 +49,7 @@ class GOL extends React.Component {
         this.gridGroup = new THREE.Group();
         this.labelsArray = [];
         //console.log(this.props.isGenocide);
+        this.savedState = [];
         this.delay = 1;
         this.active = 0;
         this.state = {
@@ -59,6 +60,8 @@ class GOL extends React.Component {
             isPlay: this.props.isPlay || false,
             isGenocide: this.props.isGenocide || false,
             isGenocideTriggered: false,
+            isCameraRot: this.props.isCameraRot || false,
+            isCameraRotTriggered: false,
             isPopulate: this.props.isPopulate || false,
             isPopulateTriggered: false,
             currentPopulation: 0,
@@ -88,14 +91,16 @@ class GOL extends React.Component {
             cd: 0x3498db
         };
 
+
         // Привязка методов
         this.updateScreenSize = this.updateScreenSize.bind(this);
-        //this.keyup = this.keyup.bind(this);
+        this.keyup = this.keyup.bind(this);
         this.handleMouseDown = this.handleMouseDown.bind(this);
         this.handleMouseMove = this.handleMouseMove.bind(this);
         this.handleMouseUp = this.handleMouseUp.bind(this);
         // ... другие методы
-
+        this.saveCurrentState = this.saveCurrentState.bind(this);
+        this.loadSavedState = this.loadSavedState.bind(this);
         // Инициализация состояния отображения меток
         this.labelsVisible = false;
         // Инициализация массива для хранения меток
@@ -311,7 +316,6 @@ class GOL extends React.Component {
         return neigbors;
     }
 
-    
     cubeDistance = (a, b) =>{
         return (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + Math.abs(a.z - b.z)) / 2;
     }
@@ -382,7 +386,7 @@ class GOL extends React.Component {
         labels.forEach((label) => {
             label.quaternion.setFromUnitVectors(label.up, up);
         });
-        };
+    };
 
     createTextSprite = (message, fontColor = '#ffffff', fontSize = 48) => {
         // Создаем элемент canvas
@@ -534,7 +538,7 @@ class GOL extends React.Component {
     handleWorkerMessage = (e) => {
         const newCellsMap = e.data;
         this.setState({ cellsMap: newCellsMap });
-      }
+    }
     
     // updateFieldState = () => {
     //     if (this.worker) {
@@ -546,10 +550,10 @@ class GOL extends React.Component {
         // Только если isGenocide изменился с false на true и функция не была вызвана ранее
         if (this.props.isGenocide && !prevProps.isGenocide && !this.state.isGenocideTriggered) {
           // Помечаем, что функция была вызвана
-          this.setState({ isGenocideTriggered: false }, () => {
+            this.setState({ isGenocideTriggered: false }, () => {
             // Вызываем handleGenocide только после установки состояния
             this.handleGenocide();
-          });
+            });
         }
         if (this.props.isPopulate && !prevProps.isPopulate && !this.state.isPopulateTriggered) {
             // Помечаем, что функция была вызвана
@@ -573,22 +577,30 @@ class GOL extends React.Component {
             this.setState({ isLabeledTriggered: true }, () => {
                 // Вызываем handleGenocide только после установки состояния
                 this.addLabelsToHexagons();
-              });
+            });
             
         }
         if(!this.props.isLabeled && !prevProps.isLabeled && this.state.isLabeledTriggered){
             this.setState({ isLabeledTriggered: false }, () => {
                 // Вызываем handleGenocide только после установки состояния
                 this.removeLabelsFromHexagons();
-              });
+            });
             
         }
         if(this.props.healpixProps.detail !== prevProps.healpixProps.detail){
             this.setState({ HexShapeCountRound: this.props.healpixProps.detail }, () => {
                 // Вызываем handleGenocide только после установки состояния
                 this.handleRing();
-              });
+            });
         }
+        if (this.props.isCameraRot && !prevProps.isCameraRot && !this.state.isCameraRotTriggered) {
+            // Помечаем, что функция была вызвана
+            this.setState({ isCameraRotTriggered: true }, () => {
+              // Вызываем handleGenocide только после установки состояния
+              this.rotateCameraAndZoomToFit();
+            });
+        }
+
     }
 
     componentWillUnmount() {
@@ -597,6 +609,7 @@ class GOL extends React.Component {
         window.removeEventListener('mousedown', this.handleMouseDown, false);
         window.removeEventListener('mousemove', this.handleMouseMove, false);
         window.removeEventListener('mouseup', this.handleMouseUp, false);
+    
         //window.removeEventListener('onMouseOver', this.handleMouseUp, false);
         
         // ... остальные обработчики        
@@ -679,11 +692,11 @@ class GOL extends React.Component {
 
         // Возвращаем группу, если нам нужно взаимодействовать с ней позже
         //return this.gridGroup;
-    };
+    }
 
     handleRing = () => {
         // Создаем временный массив для хранения новых состояний    
-    this.reinitializeGrid(true); 
+        this.reinitializeGrid(true); 
          
     }     
 
@@ -712,7 +725,7 @@ class GOL extends React.Component {
                 // If the hexagon doesn't exist, create a new one
                 else {
                     const cube = this.hexToPosition(q, r);
-                    cube.state = Math.random() < 0.5;
+                    cube.state = false;
                     cube.lifeTime = cube.state ? 1 : 0;
                     cube.stateUpdated = false;
                     cube.coordinates = { q: q, r: r, s: s };
@@ -753,9 +766,108 @@ class GOL extends React.Component {
 
         // Add the grid group back to the scene
         this.state.scene.add(this.gridGroup);
-    };
+    }
 
+    saveCurrentState = () => {
+        // Создаем массив для сохранения состояния каждой клетки
+        const currentState = [];
+    
+        // Итерируем через массив клеток в состоянии (state)
+        this.state.cellsMap.forEach((cell) => {
+            // Для каждой клетки создаем копию ее свойств
+            const cellState = {
+                cube: {
+                    ...cell.cube, // Копируем свойства cube
+                    coordinates: { ...cell.cube.coordinates }, // Глубокое копирование координат
+                    position: { ...cell.cube.position }, // Глубокое копирование позиций
+                    // Добавляем любые другие свойства, которые нужно сохранить
+                },
+                meshName: cell.name, // Сохраняем имя сетки (если оно вам нужно)
+                material: cell.material, // Сохраняем материал сетки
+                state: cell.cube.state, // Сохраняем текущее состояние клетки
+                lifeTime: cell.cube.lifeTime, // Сохраняем время жизни
+                // ...можно добавить другие свойства, если они важны для сохранения
+            };
+    
+            // Добавляем состояние клетки в массив состояний
+            currentState.push(cellState);
+        });
+    
+        // Теперь у вас есть массив currentState, содержащий состояние каждой клетки
+        // Вы можете сохранить его в состоянии компонента или где-то еще
+        this.setState({ savedState: currentState });
+        console.log( currentState );
+        console.log('Current state saved');
+    
+        // Если вам нужно сохранить состояние вне компонента (например, отправить на сервер или в localStorage),
+        // вы можете преобразовать currentState в JSON и выполнить необходимые действия
+        // const currentStateJSON = JSON.stringify(currentState);
+        // localStorage.setItem('savedGridState', currentStateJSON);
+        // или отправить на сервер...
+    }
 
+    loadSavedState = () => {
+        // Получаем сохраненное состояние, предполагая, что оно было сохранено в состоянии компонента
+        const savedState = this.state.savedState;
+    
+        // Если нет сохраненного состояния, прерываем выполнение функции
+        if (!savedState) {
+            console.error("No saved state to load.");
+            return;
+        }
+    
+        // Создаем новый массив для клеток, которые будут загружены из сохраненного состояния
+        const newCellsMap = savedState.map(savedCell => {
+            const cube = savedCell.cube;
+            // Создаем новый объект сетки (THREE.Mesh) с соответствующим материалом
+            const hexMaterial = cube.state ? this.hexMaterialActive : this.hexMaterialInactive;
+            const hexMesh = new THREE.Mesh(
+                this.createHexagonShape(this.state.hexSize),
+                hexMaterial
+            );
+    
+            // Задаем позицию и другие свойства сетки
+            hexMesh.position.set(cube.position.x, cube.position.y, 0.1);
+            hexMesh.name = savedCell.meshName;
+            hexMesh.cube = { ...cube };
+            hexMesh.scale.set(0.97, 0.97, 1);
+            
+            // Принудительно обновляем материал
+            hexMesh.material.needsUpdate = true;
+    
+            return hexMesh;
+        });
+    
+        // Обновляем состояние cellsMap новыми данными
+        this.setState({ cellsMap: newCellsMap }, () => {
+            // После обновления состояния, принудительно перерисовываем сцену
+            this.updateScene();
+        });
+    }
+    
+    // Функция для обновления сцены
+    updateScene = () => {
+        // Удаляем старую группу сетки из сцены
+        this.state.scene.remove(this.gridGroup);
+    
+        // Создаем новую группу для сетки
+        this.gridGroup = new THREE.Group();
+    
+        // Добавляем новые клетки в группу и обновляем сцену
+        this.state.cellsMap.forEach(hexMesh => {
+            this.gridGroup.add(hexMesh);
+        });
+    
+        // Добавляем обновленную группу обратно в сцену
+        this.state.scene.add(this.gridGroup);
+    
+        // Вызываем метод рендеринга сцены, если он есть
+        if (this.state.renderer && this.state.camera) {
+            this.state.renderer.render(this.state.scene, this.state.camera);
+        }
+    }
+        
+    
     handleGenocide = () => {
 
         // Создаем временный массив для хранения новых состояний
@@ -781,7 +893,7 @@ class GOL extends React.Component {
         // Обновляем состояние с новым массивом шестиугольников
         this.setState({ cellsMap: newCellsMap });
         console.log('Field cleared');
-    };
+    }
 
     handlePopulate = () => {
 
@@ -814,7 +926,7 @@ class GOL extends React.Component {
         this.setState({ cellsMap: newCellsMap });
         //console.log('Generation end, Max lifetime:', maxLifetime);
         console.log('Field populated');
-    };
+    }
 
     startUpdateCycle = () => {
         // Устанавливаем интервал для регулярного вызова updateFieldState
@@ -875,9 +987,41 @@ class GOL extends React.Component {
         // Обновляем состояние всего один раз
         this.setState({ cellsMap: newCellsMap });
         ///console.log('Generation end, Max lifetime:', maxLifetime);
-    };
-    
+    }
 
+    rotateCameraAndZoomToFit = () => {
+        // Предположим, что у вас есть глобальная переменная camera, которая является экземпляром THREE.PerspectiveCamera
+    
+        // Вращение камеры на 30 градусов вокруг оси Y
+        const angle = THREE.MathUtils.degToRad(30);
+        this.camera.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+    
+        // Вычисление необходимого уровня зума, чтобы вписать поле шестиугольников в видимую область
+        const boundingBox = new THREE.Box3().setFromObject(this.gridGroup);
+        const size = new THREE.Vector3();
+        boundingBox.getSize(size);
+    
+        // Находим минимальную сторону окна браузера
+        const minSide = Math.min(window.innerWidth, window.innerHeight);
+    
+        // Вычисляем соотношение между размером сетки и размером окна для зума
+        const zoomLevel = minSide / Math.max(size.x, size.y);
+        
+        // Применяем уровень зума к камере
+        this.camera.zoom = zoomLevel;
+        this.camera.updateProjectionMatrix();
+    
+        // Обновляем сцену
+        if (this.renderer) {
+            this.renderer.render(this.state.scene, this.camera);
+        }
+        
+        // Если у вас есть OrbitControls, необходимо обновить их состояние
+        if (this.orbitControls) {
+            this.orbitControls.update();
+        }
+    }
+    
     updateScreenSize() {
         let up_w = window.innerWidth;
         let up_h = window.innerHeight-74;
@@ -905,6 +1049,19 @@ class GOL extends React.Component {
         this.frameId = window.requestAnimationFrame(this.animate);
     }
 
+    pasteState = () => {
+        // Retrieve the saved state from a variable or server
+        // ...
+    }
+
+    // Add event listeners for key presses
+    keyup = (e) => {
+        if (e.key === 'S' || e.key === 's') {
+            this.saveCurrentState();
+        } else if (e.key === 'P' || e.key === 'p') {
+            this.loadSavedState();
+        }
+    }
     
     ////Все что ниже работает как нужно... вроде бы... пока
 

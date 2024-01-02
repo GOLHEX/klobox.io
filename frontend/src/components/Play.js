@@ -1,4 +1,6 @@
 import React, { Component } from "react";
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faPlay } from '@fortawesome/free-solid-svg-icons';
 import './Play.css';
 
 class Play extends Component {

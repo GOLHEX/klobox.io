@@ -1,0 +1,8 @@
+.camera-button {
+  font-family: "Font Awesome";
+  /* Add any other styles for the camera button here */
+  position: absolute;
+  left: 50px;
+  bottom: 50px;
+  z-index: 9999;
+}

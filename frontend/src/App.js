@@ -9,7 +9,9 @@ import Genocide from "./components/Genocide";
 import Populate from "./components/Populate";
 import ValueToggleButton from "./components/ValueToggleButton";
 import Labels from "./components/Labels";
+import CameraRot from "./components/CameraRot";
 import './App.css';
+
 
 class App extends Component {
   constructor(props){
@@ -24,6 +26,7 @@ class App extends Component {
       isGenocide: false,
       isPopulate: false,
       isLabeled: false,
+      isCameraRot: false,
       isLoading: true, // Добавлено состояние для прелоадера
     };
   }
@@ -55,9 +58,9 @@ class App extends Component {
         isPlay: newValue,
     }));
   }
+
   isGenocideChange = () => {
     // Логика очистки поля шестиугольников
-
     this.setState(prevState => ({
         ...prevState.isGenocide,
         isGenocide: true,
@@ -70,9 +73,24 @@ class App extends Component {
     }, 0); // Задержка в 0 мс означает, что это будет запланировано как макрозадача после всех текущих микрозадач
   
   }
+
+  isCameraRotChange = () => {
+    // Логика нажатия кнопки поворота камеры
+    this.setState(prevState => ({
+        ...prevState.isCameraRot,
+        isCameraRot: true,
+    }));
+    console.log('isCameraRotChange: ', this.state.isCameraRot);
+    // Задаем таймаут для возврата isCamearaRot к false
+    // Это гарантирует, что компонент Env сначала обработает true
+    setTimeout(() => {
+      this.setState({ isCameraRot: false });
+    }, 0); // Задержка в 0 мс означает, что это будет запланировано как макрозадача после всех текущих микрозадач
+
+  }
+
   isPopulateChange = () => {
     // Логика очистки поля шестиугольников
-    
     this.setState(prevState => ({
         ...prevState.isPopulate,
         isPopulate: true,
@@ -85,6 +103,7 @@ class App extends Component {
     }, 0); // Задержка в 0 мс означает, что это будет запланировано как макрозадача после всех текущих микрозадач
   
   }
+
   isLabeledChange = (newValue) => {
     console.log("Состояние isLabeled изменилось:", newValue);
     this.setState(prevState => ({
@@ -92,6 +111,7 @@ class App extends Component {
         isLabeled: newValue,
     }));
   }
+
   render() {
     const { isLoading } = this.state;
     const headerStyle = {
@@ -127,10 +147,12 @@ class App extends Component {
           isLabeledChange={this.isLabeledChange}
         /> 
         </div>
+        <CameraRot isCameraRotChange={this.isCameraRotChange} />
         <Env
           healpixProps={this.state.healpixProps}
           isPlay={this.state.isPlay}
           isGenocide={this.state.isGenocide}
+          isCameraRot={this.state.isCameraRot}
           isPopulate={this.state.isPopulate}
           isLabeled={this.state.isLabeled}
         />
