@@ -30,7 +30,8 @@ class GOL extends React.Component {
         const renderer = new THREE.WebGLRenderer({alpha: false, antialias: false });
         this.camera = camera;
         this.clock = new THREE.Clock();
-        const controls = new MapControls( this.camera, renderer.domElement );
+        //const controls = new MapControls( this.camera, renderer.domElement );
+        const controls = new OrbitControls( this.camera, renderer.domElement );
         controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
         controls.dampingFactor = 0.25;
         controls.screenSpacePanning = false;
@@ -55,6 +56,7 @@ class GOL extends React.Component {
         this.state = {
             scene: scene,
             renderer: renderer,
+            history: [],
             isLabeled: this.props.isLabeled || false,
             isLabeledTriggered: false,
             isPlay: this.props.isPlay || false,
@@ -573,6 +575,12 @@ class GOL extends React.Component {
         if (this.worker) {
             this.worker.terminate();
         }
+        if(this.props.isNext && !prevProps.isNext){
+            this.updateFieldState(1);
+        }
+        if(this.props.isPrev && !prevProps.isPrev){
+            this.updateFieldState(-1);
+        }
         if(this.props.isLabeled && !prevProps.isLabeled && !this.state.isLabeledTriggered){
             this.setState({ isLabeledTriggered: true }, () => {
                 // Вызываем handleGenocide только после установки состояния
@@ -601,6 +609,7 @@ class GOL extends React.Component {
             });
         }
 
+
     }
 
     componentWillUnmount() {
@@ -619,6 +628,7 @@ class GOL extends React.Component {
         this.stopUpdateCycle(); // Очистка при размонтировании компонента
         this.removeLabelsFromHexagons()
     }
+
 
     createHexagonShape(size) {
         const shape = new THREE.Shape();
@@ -939,62 +949,186 @@ class GOL extends React.Component {
         this.interval = null;
     }
 
-    updateFieldState = () => {
-        // Создаем временный массив для хранения новых состояний
+    updateFieldState = (direction, steps) => {
+
+        if (direction === undefined) {
+            direction = 1;
+        }
+    
+        if (steps === undefined) {
+            steps = 1;
+        }
+
         const newStates = new Map();
-        //let maxLifetime = 0;
-        // Первый проход для определения новых состояний
         this.state.cellsMap.forEach(cell => {
-            //const lifeTime = cell.cube.lifeTime;
             const activeNeighbors = this.findActiveNeighbors(cell.cube).length;
             const currentlyActive = cell.cube.state;
             let nextState = currentlyActive;
-            //let nextLifeTime = lifeTime;
-
-            // if (currentlyActive && (activeNeighbors < 2 || activeNeighbors >= 3)) { // Если активный и у него меньше 2 или больше 3 соседей, он становится неактивным
-            //     nextState = false;
-            //     } else if (!currentlyActive && activeNeighbors === 2) { // Если неактивный и у него 3 соседа, он становится активным
-            //     nextState = true;
-            // }   
+    
             if (currentlyActive) {
-                // Если клетка живая (активная)
-                if (activeNeighbors === 3 || activeNeighbors === 4) {
-                    nextState = true;
-                } else {
-                    nextState = false;
-                }
+                nextState = activeNeighbors === 3 || activeNeighbors === 4;
             } else {
-                if (activeNeighbors === 2) {
-                    nextState = true;
-                } else {
-                    nextState = false;
-                }
+                nextState = activeNeighbors === 2;
             }
             newStates.set(cell.cube.name, nextState);
         });
-      
-        // Второй проход для обновления состояния и материалов, если необходимо
+    
         const newCellsMap = this.state.cellsMap.map(cell => {
-          const nextState = newStates.get(cell.cube.name);
-          if (cell.cube.state !== nextState) {
-            cell.cube.state = nextState;
-            cell.material = nextState ? this.hexMaterialActive : this.hexMaterialInactive;
-            cell.material.needsUpdate = true;
-
-          }
-          return cell;
+            const nextState = newStates.get(cell.cube.name);
+            if (cell.cube.state !== nextState) {
+                cell.cube.state = nextState;
+                cell.material = nextState ? this.hexMaterialActive : this.hexMaterialInactive;
+                cell.material.needsUpdate = true;
+            }
+            return cell;
         });
-        // Обновляем состояние всего один раз
-        this.setState({ cellsMap: newCellsMap });
-        ///console.log('Generation end, Max lifetime:', maxLifetime);
-    }
+    
+        const history = this.state.history.slice(0, 100);
+    
+        if (direction === 1) {
+            history.push(newCellsMap);
+            this.setState({ cellsMap: newCellsMap, history });
+        } else if (direction === -1 && history.length > 1) {
+            // Для движения назад берем предыдущее состояние, удаляем последнее из истории
+            const prevState = history[history.length - 2];
+            history.pop();
+            this.setState({ cellsMap: prevState, history });
+        }
+    };
+    
+
+    // updateFieldState = (direction = 1, steps = 1) => {
+    //     // Создаем временный массив для хранения новых состояний
+    //     const newStates = new Map();
+    //     //let maxLifetime = 0;
+    //     // Первый проход для определения новых состояний
+    //     this.state.cellsMap.forEach(cell => {
+    //         //const lifeTime = cell.cube.lifeTime;
+    //         const activeNeighbors = this.findActiveNeighbors(cell.cube).length;
+    //         const currentlyActive = cell.cube.state;
+    //         let nextState = currentlyActive;
+    //         //let nextLifeTime = lifeTime;
+
+    //         // if (currentlyActive && (activeNeighbors < 2 || activeNeighbors >= 3)) { // Если активный и у него меньше 2 или больше 3 соседей, он становится неактивным
+    //         //     nextState = false;
+    //         //     } else if (!currentlyActive && activeNeighbors === 2) { // Если неактивный и у него 3 соседа, он становится активным
+    //         //     nextState = true;
+    //         // }   
+    //         // Обновление состояния клеток в зависимости от количества активных соседей
+    //         if (currentlyActive) {
+    //             // Если клетка живая (активная)
+    //             if (activeNeighbors === 3 || activeNeighbors === 4) {
+    //                 nextState = true; // Клетка остается живой, если у нее 3 или 4 активных соседа
+    //             } else {
+    //                 nextState = false; // Клетка умирает, если у нее меньше 3 или больше 4 активных соседей
+    //             }
+    //         } else {
+    //             // Если клетка мертвая (неактивная)
+    //             if (activeNeighbors === 2) {
+    //                 nextState = true; // Клетка оживает, если у нее 2 активных соседа
+    //             } else {
+    //                 nextState = false; // Клетка остается мертвой, если у нее меньше 2 или больше 2 активных соседей
+    //             }
+    //         }
+    //         newStates.set(cell.cube.name, nextState); // Сохраняем новое состояние клетки в Map
+    //     });
+      
+    //     // Второй проход для обновления состояния и материалов, если необходимо
+    //     const newCellsMap = this.state.cellsMap.map(cell => {
+    //         const nextState = newStates.get(cell.cube.name);
+    //         if (cell.cube.state !== nextState) {
+    //             cell.cube.state = nextState;
+    //             cell.material = nextState ? this.hexMaterialActive : this.hexMaterialInactive;
+    //             cell.material.needsUpdate = true;
+    //         }
+    //         return cell;
+    //     });
+
+    //     // Добавляем новое состояние в историю
+    //     const history = this.state.history.slice(0, 100); // Ограничиваем историю до 100 шагов
+
+    //     // если направление вперед, то назначаем в стейт последний элемент из истории
+    //     // если направление назад, то назначаем в стейт предпоследний элемент из истории
+
+    //     if(direction === 1){
+    //         // Добавляем новое состояние только при движении вперед
+    //         history.push(newCellsMap);
+    //         this.setState({ cellsMap: newCellsMap, history });
+    //     } else if(direction === -1 && history.length > 1){
+    //         // При движении назад берем предпоследнее состояние
+    //         this.setState({ cellsMap: history[history.length - 1], history });
+    //     }
+    //     console.log(history);
+
+    //     ///console.log('Generation end, Max lifetime:', maxLifetime);
+    // }
+
+    // updateFieldState = () => {
+    //     // Создаем временный массив для хранения новых состояний
+    //     const newStates = new Map();
+    //     //let maxLifetime = 0;
+    //     // Первый проход для определения новых состояний
+    //     this.state.cellsMap.forEach(cell => {
+    //         //const lifeTime = cell.cube.lifeTime;
+    //         const activeNeighbors = this.findActiveNeighbors(cell.cube).length;
+    //         const currentlyActive = cell.cube.state;
+    //         let nextState = currentlyActive;
+    //         //let nextLifeTime = lifeTime;
+
+    //         // if (currentlyActive && (activeNeighbors < 2 || activeNeighbors >= 3)) { // Если активный и у него меньше 2 или больше 3 соседей, он становится неактивным
+    //         //     nextState = false;
+    //         //     } else if (!currentlyActive && activeNeighbors === 2) { // Если неактивный и у него 3 соседа, он становится активным
+    //         //     nextState = true;
+    //         // }   
+    //         if (currentlyActive) {
+    //             // Если клетка живая (активная)
+    //             if (activeNeighbors === 3 || activeNeighbors === 4) {
+    //                 nextState = true;
+    //             } else {
+    //                 nextState = false;
+    //             }
+    //         } else {
+    //             if (activeNeighbors === 2) {
+    //                 nextState = true;
+    //             } else {
+    //                 nextState = false;
+    //             }
+    //         }
+    //         newStates.set(cell.cube.name, nextState);
+    //     });
+      
+    //     // Второй проход для обновления состояния и материалов, если необходимо
+    //     const newCellsMap = this.state.cellsMap.map(cell => {
+    //       const nextState = newStates.get(cell.cube.name);
+    //       if (cell.cube.state !== nextState) {
+    //         cell.cube.state = nextState;
+    //         cell.material = nextState ? this.hexMaterialActive : this.hexMaterialInactive;
+    //         cell.material.needsUpdate = true;
+
+    //       }
+    //       return cell;
+    //     });
+    //     // Обновляем состояние всего один раз
+    //     this.setState({ cellsMap: newCellsMap });
+    //     ///console.log('Generation end, Max lifetime:', maxLifetime);
+    // }
+
+
+    // // Функция для обновления состояния на один шаг
+    // stepGeneration = () => {
+        
+    //     //однократно вызываем функцию updateFieldState передавая как параметр шаг "вперед , назад или смещение на определенное количество шагов в прошлое или будущее"
+
+
+    // };
+
 
     rotateCameraAndZoomToFit = () => {
         // Предположим, что у вас есть глобальная переменная camera, которая является экземпляром THREE.PerspectiveCamera
     
         // Вращение камеры на 30 градусов вокруг оси Y
         const angle = THREE.MathUtils.degToRad(30);
-        this.camera.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+        this.camera.position.applyAxisAngle(new THREE.Vector3(0, 0, 1), angle);
     
         // Вычисление необходимого уровня зума, чтобы вписать поле шестиугольников в видимую область
         const boundingBox = new THREE.Box3().setFromObject(this.gridGroup);
@@ -1008,18 +1142,24 @@ class GOL extends React.Component {
         const zoomLevel = minSide / Math.max(size.x, size.y);
         
         // Применяем уровень зума к камере
-        this.camera.zoom = zoomLevel;
+        this.camera.zoom = zoomLevel/this.state.HexShapeCountRound;
         this.camera.updateProjectionMatrix();
     
         // Обновляем сцену
-        if (this.renderer) {
-            this.renderer.render(this.state.scene, this.camera);
+        if (this.state.renderer) {
+            this.state.renderer.render(this.state.scene, this.camera);
         }
         
-        // Если у вас есть OrbitControls, необходимо обновить их состояние
+        // // Если у вас есть OrbitControls, необходимо обновить их состояние
+        // if (this.orbitControls) {
+        //     this.orbitControls.update();
+        // }
+        // Пример использования OrbitControls для плавного вращения
         if (this.orbitControls) {
-            this.orbitControls.update();
+            this.orbitControls.rotateLeft(angle);
         }
+        this.setState({ isCameraRotTriggered: false });
+
     }
     
     updateScreenSize() {
@@ -1065,11 +1205,22 @@ class GOL extends React.Component {
     
     ////Все что ниже работает как нужно... вроде бы... пока
 
-    handleMouseDown = (e)   => {
+    handleMouseDown = (e) => {
         if (e.button !== 0) return; // Если нажата не левая кнопка мыши, выходим из функции
         e.preventDefault(); // prevent scrolling on touch
         this.setState({ isDrawing: true });
         this.toggleHexState(e);
+    }
+
+    handleLongTouch = (e) => {
+        e.preventDefault(); // prevent scrolling on touch
+        this.setState({ isDrawing: true });
+        this.toggleHexState(e);
+        // Add your long touch logic here
+    }
+
+    handleTouchEnd = (e) => {
+        this.setState({ isDrawing: false });
     }
 
     handleMouseMove = (e) => {

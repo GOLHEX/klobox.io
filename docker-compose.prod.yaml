@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  frontend:
+    image: makaronfx/kloboxio_frontend:latest
+    ports:
+      - "80:80"  # В продакшне обычно используется 80 порт для HTTP
+    networks:
+      - react-express
+
+  backend:
+    image: makaronfx/kloboxio_backend:latest
+    expose:
+      - "9001"  # Экспонируем только внутри сети Docker
+    networks:
+      - express-mongo
+      - react-express
+
+  mongo:
+    image: mongo:6
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - express-mongo
+
+networks:
+  react-express:
+  express-mongo:
+
+volumes:
+  mongo-data:

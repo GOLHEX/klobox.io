@@ -1,52 +1,32 @@
 # syntax=docker/dockerfile:1.4
 
-# Create image based on the official Node image from dockerhub
-FROM node:lts-buster AS development
-
-# Create app directory
-WORKDIR /usr/src/app
-
-# Copy dependency definitions
-COPY package.json /usr/src/app
-COPY package-lock.json /usr/src/app
-
-# Install dependecies
-#RUN npm set progress=false \
-#    && npm config set depth 0 \
-#    && npm i install
-RUN npm ci
-
-# Get all the code needed to run the app
-COPY . /usr/src/app
-
-# Expose the port the app runs in
-EXPOSE 3000
-
-# Serve the app
-CMD ["npm", "start"]
-
-
-# Production stage
-FROM node:lts-buster AS production
+# Development stage
+FROM node:20-buster AS development
 WORKDIR /usr/src/app
 COPY package*.json ./
+# Install dependencies
+RUN apt-get update && \
+    apt-get install -y build-essential git && \
+    rm -rf /var/lib/apt/lists/*
+RUN npm ci
+COPY . .
+EXPOSE 3000
+CMD ["npm", "start"]
+
+# Production stage
+FROM node:20-buster AS production
+WORKDIR /usr/src/app
+COPY package*.json ./
+# Install only production dependencies
+RUN apt-get update && \
+    apt-get install -y build-essential git && \
+    rm -rf /var/lib/apt/lists/*
 RUN npm ci --only=production
 COPY . .
 RUN npm run build
-# Here you can set up a web server, e.g., Nginx, to serve the static files
 
-# Development environments stage
-FROM development as dev-envs
-RUN <<EOF
-apt-get update
-apt-get install -y --no-install-recommends git
-EOF
-
-RUN <<EOF
-useradd -s /bin/bash -m vscode
-groupadd docker
-usermod -aG docker vscode
-EOF
-# install Docker tools (cli, buildx, compose)
-COPY --from=gloursdocker/docker / /
-CMD [ "npm", "start" ]
+# Serve stage
+FROM nginx:alpine
+COPY --from=production /usr/src/app/build /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

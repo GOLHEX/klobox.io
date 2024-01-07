@@ -41,8 +41,7 @@ io.on('connection', socket => {
 
 const port = 3000;
 server.listen(port, () => {
-  
-  
+
   process.on('SIGINT', () => {
     console.log('Received SIGINT. Shutting down.');
     server.close(() => {
@@ -57,4 +56,5 @@ server.listen(port, () => {
     });
   });
   console.log('Socket.io server started on port', port);
+  
 });

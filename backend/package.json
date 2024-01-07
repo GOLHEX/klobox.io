@@ -2,15 +2,17 @@
   "name": "node-server",
   "version": "1.0.0",
   "description": "Node.js server with Socket.io and HTTPS",
-  "main": "ioserver.js",
+  "main": "wsserver.js",
   "scripts": {
-    "start": "node ioserver.js"
+    "start": "node wsserver.js"
   },
   "author": "Myky",
   "license": "ISC",
   "dependencies": {
     "express": "^4.17.1",
-    "socket.io": "^4.0.0",
-    "https": "^1.0.0"
+    "https": "^1.0.0",
+    "socket.io": "^4.4.1",
+    "uWebSockets.js": "uNetworking/uWebSockets.js#v20.38.0",
+    "jsonwebtoken": "^8.5.1"
   }
 }

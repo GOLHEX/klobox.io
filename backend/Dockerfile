@@ -1,22 +1,25 @@
-# Базовый образ для разработки
-FROM node:lts-buster AS development
+# syntax=docker/dockerfile:1.4
 
-# Установка рабочей директории в контейнере
+# Development stage
+FROM node:20-buster AS development
 WORKDIR /usr/src/app
-
-# Копирование файлов package.json и package-lock.json
 COPY package*.json ./
-
-# Установка зависимостей проекта
-RUN npm install
-
-# Копирование исходного кода сервера в контейнер
+RUN apt-get update && \
+    apt-get install -y build-essential git
+RUN npm ci
 COPY . .
-
-# Открытие порта 3000 для внешнего доступа к серверу
-EXPOSE 3000
-
-# Команда для запуска сервера
+EXPOSE 9001
 CMD ["npm", "start"]
 
-# Дополнительные стадии сборки можно добавлять здесь, если нужно
+# Build stage
+FROM node:20-buster AS build
+WORKDIR /usr/src/app
+COPY --from=development /usr/src/app .
+RUN npm run build
+
+# Production stage
+FROM node:20-buster-slim
+WORKDIR /usr/src/app
+COPY --from=build /usr/src/app .
+EXPOSE 9001
+CMD ["node", "wsserver.js"]

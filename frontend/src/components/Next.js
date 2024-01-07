@@ -2,6 +2,8 @@
 import React, { Component, useState } from "react";
 import './Next.css';
 import { random } from "nanoid";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faStepForward } from "@fortawesome/free-solid-svg-icons";
 
 class Next extends React.Component {
   constructor(props) {
@@ -19,7 +21,7 @@ class Next extends React.Component {
     const nextStyle = `next-button`;
     return (
       <button onClick={this.handleNextClick} className={nextStyle}>
-        Next
+        <FontAwesomeIcon icon={faStepForward} />
       </button>
     );
   }

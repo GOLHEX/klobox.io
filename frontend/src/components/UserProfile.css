@@ -1,0 +1,14 @@
+.UserProfile {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 30px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.UserProfile .line {
+  width: 100%;
+  height: 2px;
+  background-color: black;
+}
