@@ -6,9 +6,9 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 RUN apt-get update && \
     apt-get install -y build-essential git
-RUN npm ci
+RUN npm ci --include=dev
 COPY . .
-EXPOSE 9001
+EXPOSE 9001-9004
 CMD ["npm", "start"]
 
 # Build stage
@@ -21,5 +21,5 @@ RUN npm run build
 FROM node:20-buster-slim
 WORKDIR /usr/src/app
 COPY --from=build /usr/src/app .
-EXPOSE 9001
+EXPOSE 9001-9004
 CMD ["node", "wsserver.js"]

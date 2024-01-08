@@ -1,7 +1,7 @@
 {
-  "name": "node-server",
+  "name": "ws-server",
   "version": "1.0.0",
-  "description": "Node.js server with Socket.io and HTTPS",
+  "description": "Node.js ws server with uWebSockets and HTTPS",
   "main": "wsserver.js",
   "scripts": {
     "start": "node wsserver.js"
@@ -10,8 +10,8 @@
   "license": "ISC",
   "dependencies": {
     "express": "^4.17.1",
+    "nodemon": "3.0.2",
     "https": "^1.0.0",
-    "socket.io": "^4.4.1",
     "uWebSockets.js": "uNetworking/uWebSockets.js#v20.38.0",
     "jsonwebtoken": "^8.5.1"
   }

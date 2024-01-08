@@ -1,8 +1,8 @@
 //frontend\src\three\Env.js
 import React, { Component } from "react"
 //import uWS from "uWebSockets.js"
-import MetaMaskSDK from '@metamask/sdk';
-import Tetra from "./Tetra"
+//import MetaMaskSDK from '@metamask/sdk';
+//import Tetra from "./Tetra"
 import GOL from "./GameOfLife"
 import W from "../wrapper/W"
 import './Env.css'
@@ -15,7 +15,7 @@ class Env extends Component {
     this.userPos = this.userPos.bind(this);
     this.lastPose = { x: '15', y: '15' };
     this.state = {
-      endpoint: 'ws://localhost:9001',
+      endpoint: 'https://yarn.ddns.net:9001',
       username: 'user',
       password: 'pass',
       token: '',
@@ -116,26 +116,26 @@ componentWillUnmount() {
 }
 
 
-  handleClick() {
-    console.log('Clicked');
-    const rnd = this.getRandomInt(0, this.state.colors.length);
-    const newColor = this.state.colors[rnd];
-    this.setState({ rnd, color: newColor });
-    this.cc(newColor);
-  }
+  // handleClick() {
+  //   console.log('Clicked');
+  //   const rnd = this.getRandomInt(0, this.state.colors.length);
+  //   const newColor = this.state.colors[rnd];
+  //   this.setState({ rnd, color: newColor });
+  //   this.cc(newColor);
+  // }
 
-  cc(cd) {
-    const message = JSON.stringify({ type: 'cc', color: cd });
-    this.socket.send(message);
-  }
+  // cc(cd) {
+  //   const message = JSON.stringify({ type: 'cc', color: cd });
+  //   this.socket.send(message);
+  // }
 
-  userPos(x, y) {
-    if (this.lastPose.x !== x || this.lastPose.y !== y) {
-      const message = JSON.stringify({ type: 'userPos', x, y });
-      this.socket.send(message);
-      this.lastPose = { x, y };
-    }
-  }  
+  // userPos(x, y) {
+  //   if (this.lastPose.x !== x || this.lastPose.y !== y) {
+  //     const message = JSON.stringify({ type: 'userPos', x, y });
+  //     this.socket.send(message);
+  //     this.lastPose = { x, y };
+  //   }
+  // }  
 
   render() {
     return (
@@ -143,8 +143,8 @@ componentWillUnmount() {
       //<Tetra io={this.socket} onClick={this.handleClick} userPos={this.userPos} usercolor="blue" />
       //<Tetra io={this.socket} onClick={this.handleClick} userPos={this.userPos} usercolor="blue" healpixProps={this.props.healpixProps} isPlay={this.props.isPlay} />
       <GOL className="GOL" 
-        io={this.socket} 
-        onClick={this.handleClick} 
+        /*io={this.socket}*/ 
+        /*onClick={this.handleClick}*/ 
         healpixProps={this.props.healpixProps} 
         isPlay={this.props.isPlay} 
         isNext={this.props.isNext}
@@ -153,7 +153,7 @@ componentWillUnmount() {
         isCameraRot={this.props.isCameraRot} 
         isPopulate={this.props.isPopulate}  
         isLabeled={this.props.isLabeled} 
-        userPos={this.userPos} 
+        /*userPos={this.userPos}*/
         usercolor="blue" 
       />
 
