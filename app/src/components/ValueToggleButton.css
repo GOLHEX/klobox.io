@@ -1,0 +1,28 @@
+.value-toggle-container {
+    display: flex;
+    align-items: center;
+  }
+  
+  .control-button {
+    background-color: transparent; 
+    border: 1px solid #ffffff; 
+    border-radius: 50%;
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px; 
+    height: 48px;
+    margin: 0 16px; 
+    cursor: pointer;
+    transition: background-color 0.3s;
+  }
+  
+  .control-icon {
+    font-size: 24px; 
+  }
+  
+  .control-button:hover {
+    background-color: #ffffff; 
+    color: #282828; 
+  }

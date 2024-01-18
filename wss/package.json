@@ -1,0 +1,18 @@
+{
+  "name": "ws-server",
+  "version": "1.0.0",
+  "description": "Node.js ws server with uWebSockets and HTTPS",
+  "main": "wsserver.js",
+  "scripts": {
+    "start": "node wsserver.js"
+  },
+  "author": "Myky",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.17.1",
+    "nodemon": "3.0.2",
+    "https": "^1.0.0",
+    "uWebSockets.js": "https://github.com/uNetworking/uWebSockets.js.git#v20.38.0",
+    "jsonwebtoken": "^8.5.1"
+  }
+}

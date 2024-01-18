@@ -1,5 +1,6 @@
 /.vscode
 /bckp_copy_hard_file_storage
-/data
 /patterns
 /refres
+/nginx
+/data

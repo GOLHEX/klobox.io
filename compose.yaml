@@ -1,44 +1,72 @@
+version: '3.8'
+
 services:
-  frontend:
+  app:
+    image: makaronfx/kloboxapp:${TAG:-latest}
     build:
-      context: frontend
-      target: development
+      context: ./app
+      dockerfile: Dockerfile
+      target: ${BUILD_TARGET:-development}
+    environment:
+      - NODE_ENV=production
+      - REACT_APP_WS_URL=ws://localhost:9001
     ports:
-      - 3000:3000
-    stdin_open: true
+      - "3000:3000"
+      - "35729:35729"
     volumes:
-      - ./frontend:/usr/src/app
+      - ./app:/usr/src/app
       - /usr/src/app/node_modules
-    restart: always
+    develop:
+      watch:
+        - path: ./app/package.json
+          action: rebuild
+        - path: ./app
+          target: /usr/src/app
+          action: sync
     networks:
       - react-express
-    depends_on:
-      - backend
-
-  backend:
-    restart: always
+  wss:
+    image: makaronfx/kloboxwss:${TAG:-latest}
     build:
-      context: backend
-      target: development
+      context: ./wss
+      dockerfile: Dockerfile
+      target: ${BUILD_TARGET:-development}
     volumes:
-      - ./backend:/usr/src/app
-      - /usr/src/app/node_modules
+      - ./wss:/usr/src/wss
+      - /usr/src/wss/node_modules
+    ports:
+      - "9001:9001" # Открытие порта 9001 для WebSocket
+      - "9002:9002" # Открытие порта 9002 для WebSocket
+      - "9003:9003" # Открытие порта 9003 для WebSocket
+      - "9004:9004" # Открытие порта 9004 для WebSocket
+    networks:
+      - express-mongo
+      - react-express
     depends_on:
       - mongo
-    networks:
-      - express-mongo
-      - react-express
-    expose: 
-      - 3000
   mongo:
-    restart: always
-    image: mongo:4.2.0
+    image: mongo:6
     volumes:
-      - ./data:/data/db
+    - mongo-data:/data/db
     networks:
-      - express-mongo
+    - express-mongo
     expose:
-      - 27017
+    - "27017:27017"
+  nginx:
+    image: nginx:1.19.6-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - app
+    networks:
+      - react-express
+    restart: always
 networks:
   react-express:
   express-mongo:
+volumes:
+  mongo-data:

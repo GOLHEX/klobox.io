@@ -1,0 +1,5 @@
+yarn run v1.22.19
+$ build-storybook --output-dir /tmp/chromatic--8375-wwcWiSw0JDPq
+/bin/sh: 1: build-storybook: not found
+error Command failed with exit code 127.
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.
