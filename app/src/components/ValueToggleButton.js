@@ -1,4 +1,8 @@
 import React, { Component, useState } from "react"
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faPlus, faMinus } from '@fortawesome/free-solid-svg-icons';
+import './../tailwind/tailwind.css';
+import './ValueToggleButton.css';
 
 class ValueToggleButton extends Component {
   constructor(props) {
@@ -30,10 +34,14 @@ class ValueToggleButton extends Component {
 
   render() {
     return (
-      <div>
-        <button onClick={this.handleDecreaseClick}>-</button>
-        <span>{this.state.value}</span>
-        <button onClick={this.handleIncreaseClick}>+</button>
+      <div className="value-toggle-container">
+        <button onClick={this.handleDecreaseClick} className="control-button">
+          <FontAwesomeIcon icon={faMinus} className="control-icon" />
+        </button>
+        <div className="value-display">{this.state.value}</div>
+        <button onClick={this.handleIncreaseClick} className="control-button">
+          <FontAwesomeIcon icon={faPlus} className="control-icon" />
+        </button>
       </div>
     );
   }

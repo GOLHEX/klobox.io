@@ -1,6 +1,9 @@
 // Pop[ulate] button component
 import React, { Component, useState } from "react";
-import './Populate.css';
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faDice } from '@fortawesome/free-solid-svg-icons';
+import './../tailwind/tailwind.css';
+
 import { random } from "nanoid";
 
 class Populate extends React.Component {
@@ -16,10 +19,10 @@ class Populate extends React.Component {
 
   render() {
     // стили и т.д.
-    const populateStyle = `genocide-button`;
+    const populateStyle = `populate`;
     return (
       <button onClick={this.handlePopulateClick} className={populateStyle}>
-        Populate
+        <FontAwesomeIcon icon={faDice} />
       </button>
     );
   }

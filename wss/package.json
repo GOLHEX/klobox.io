@@ -12,7 +12,7 @@
     "express": "^4.17.1",
     "nodemon": "3.0.2",
     "https": "^1.0.0",
-    "uWebSockets.js": "uNetworking/uWebSockets.js#v20.38.0",
+    "uWebSockets.js": "https://github.com/uNetworking/uWebSockets.js.git#v20.38.0",
     "jsonwebtoken": "^8.5.1"
   }
 }

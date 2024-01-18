@@ -1,5 +1,6 @@
 import React from 'react';
-import './UserProfile.css'; // Импортируйте свой CSS-файл здесь
+import './../tailwind/tailwind.css';
+ // Импортируйте свой CSS-файл здесь
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faUser } from "@fortawesome/free-solid-svg-icons";
 

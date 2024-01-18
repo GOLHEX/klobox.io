@@ -1,6 +1,6 @@
 // Next button component
 import React, { Component, useState } from "react";
-import './Prev.css';
+import './../tailwind/tailwind.css';
 import { random } from "nanoid";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faStepBackward } from "@fortawesome/free-solid-svg-icons";
@@ -18,7 +18,7 @@ class Prev extends React.Component {
 
   render() {
     // стили и т.д.
-    const prevStyle = `prev-button`;
+    const prevStyle = `prev`;
     return (
       <button onClick={this.handlePrevClick} className={prevStyle}>
         <FontAwesomeIcon icon={faStepBackward} />

@@ -1,6 +1,6 @@
 // Genocide button component
 import React, { Component, useState } from "react";
-import './CameraRot.css';
+import './../tailwind/tailwind.css';
 import { random } from "nanoid";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCamera } from '@fortawesome/free-solid-svg-icons';

@@ -1,0 +1,35 @@
+/* В файле global.css или аналогичном */
+.hexagon {
+  width: calc(150px * 0.645);
+  height: 150px;
+  background-image: linear-gradient(90deg, #00ffb8, #13ce9a);
+  border-radius: 15px; /* 150px / 10 */
+  transition: transform 400ms ease;
+}
+
+/* Нет прямой поддержки псевдоэлементов в Tailwind, поэтому используйте обычный CSS */
+.hexagon:before, .hexagon:after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: inherit;
+  height: inherit;
+  background-image: inherit;
+  border-radius: inherit;
+}
+
+.hexagon:before {
+  transform: rotate(60deg);
+}
+
+.hexagon:after {
+  transform: rotate(-60deg);
+}
+
+/* Для использования Tailwind, класс 'center' может быть добавлен в глобальные стили */
+.center {
+  @apply fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2;
+}

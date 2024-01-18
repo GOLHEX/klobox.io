@@ -3,23 +3,23 @@
 # Development stage
 FROM node:20-buster AS development
 WORKDIR /usr/src/app
-COPY package*.json ./
+COPY package.json yarn.lock ./
 RUN apt-get update && \
     apt-get install -y build-essential git
-RUN npm ci --include=dev
+RUN yarn install --frozen-lockfile
 COPY . .
-EXPOSE 9001-9004
-CMD ["npm", "start"]
+EXPOSE 9001-9005
+CMD ["yarn", "start"]
 
 # Build stage
 FROM node:20-buster AS build
 WORKDIR /usr/src/app
 COPY --from=development /usr/src/app .
-RUN npm run build
+RUN yarn build
 
 # Production stage
-FROM node:20-buster-slim
+FROM node:20-buster-slim AS production
 WORKDIR /usr/src/app
 COPY --from=build /usr/src/app .
-EXPOSE 9001-9004
+EXPOSE 9001-9005
 CMD ["node", "wsserver.js"]

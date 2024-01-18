@@ -1,6 +1,6 @@
 // Next button component
 import React, { Component, useState } from "react";
-import './Next.css';
+import './../tailwind/tailwind.css';
 import { random } from "nanoid";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faStepForward } from "@fortawesome/free-solid-svg-icons";
@@ -18,7 +18,7 @@ class Next extends React.Component {
 
   render() {
     // стили и т.д.
-    const nextStyle = `next-button`;
+    const nextStyle = `next`;
     return (
       <button onClick={this.handleNextClick} className={nextStyle}>
         <FontAwesomeIcon icon={faStepForward} />

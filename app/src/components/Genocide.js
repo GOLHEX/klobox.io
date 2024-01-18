@@ -1,6 +1,8 @@
 // Genocide button component
 import React, { Component, useState } from "react";
-import './Genocide.css';
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faGhost } from '@fortawesome/free-solid-svg-icons';
+import './../tailwind/tailwind.css';
 import { random } from "nanoid";
 
 class Genocide extends React.Component {
@@ -16,10 +18,10 @@ class Genocide extends React.Component {
 
   render() {
     // стили и т.д.
-    const genocideStyle = `genocide-button`;
+    const genocideStyle = `genocide`;
     return (
       <button onClick={this.handleGenocideClick} className={genocideStyle}>
-        Genocide
+        <FontAwesomeIcon icon={faGhost} />
       </button>
     );
   }

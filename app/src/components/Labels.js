@@ -1,6 +1,6 @@
 //frontend\src\components\Labels.js
 import React, { Component } from "react";
-//import './Play.css';
+import './../tailwind/tailwind.css';
 
 class Labels extends Component {
     constructor(props) {

@@ -3,9 +3,9 @@ import React, { Component } from "react"
 //import uWS from "uWebSockets.js"
 //import MetaMaskSDK from '@metamask/sdk';
 //import Tetra from "./Tetra"
-import GOL from "./GameOfLife"
-import W from "../wrapper/W"
-import './Env.css'
+import GOL from "./GameOfLife.js"
+import W from "../wrapper/W.js"
+import './../tailwind/tailwind.css'
 
 class Env extends Component {
   constructor(props) {
@@ -15,7 +15,7 @@ class Env extends Component {
     this.userPos = this.userPos.bind(this);
     this.lastPose = { x: '15', y: '15' };
     this.state = {
-      endpoint: 'https://yarn.ddns.net:9001',
+      endpoint: 'ws://localhost:9002',
       username: 'user',
       password: 'pass',
       token: '',
@@ -116,26 +116,26 @@ componentWillUnmount() {
 }
 
 
-  // handleClick() {
-  //   console.log('Clicked');
-  //   const rnd = this.getRandomInt(0, this.state.colors.length);
-  //   const newColor = this.state.colors[rnd];
-  //   this.setState({ rnd, color: newColor });
-  //   this.cc(newColor);
-  // }
+  handleClick() {
+    console.log('Clicked');
+    const rnd = this.getRandomInt(0, this.state.colors.length);
+    const newColor = this.state.colors[rnd];
+    this.setState({ rnd, color: newColor });
+    this.cc(newColor);
+  }
 
-  // cc(cd) {
-  //   const message = JSON.stringify({ type: 'cc', color: cd });
-  //   this.socket.send(message);
-  // }
+  cc(cd) {
+    const message = JSON.stringify({ type: 'cc', color: cd });
+    this.socket.send(message);
+  }
 
-  // userPos(x, y) {
-  //   if (this.lastPose.x !== x || this.lastPose.y !== y) {
-  //     const message = JSON.stringify({ type: 'userPos', x, y });
-  //     this.socket.send(message);
-  //     this.lastPose = { x, y };
-  //   }
-  // }  
+  userPos(x, y) {
+    if (this.lastPose.x !== x || this.lastPose.y !== y) {
+      const message = JSON.stringify({ type: 'userPos', x, y });
+      this.socket.send(message);
+      this.lastPose = { x, y };
+    }
+  }  
 
   render() {
     return (

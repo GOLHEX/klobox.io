@@ -1,40 +1,90 @@
-.preloader {
+.preloader-container {
   display: flex;
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background-color: #EDEEF0;
-  font-family: 'Lilita One', sans-serif;
+  background: #282a36; /* Фон подложки для контраста */
+}
+
+.preloader-battery {
+  display: block;
+  margin: 2rem auto;
   position: relative;
+  width: 2.25rem;
+  height: 4.5rem;
+  box-shadow: 0 0 0 0.2rem rgb(66, 92, 119);
+  border-radius: 0.09rem;
+  background: white;
 }
 
-.loading-text, .loading-text-shadow {
-  font-size: 10em;
-  font-weight: bold;
+.preloader-battery:before {
+  content: '';
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  user-select: none;
+  left: 0.5625rem;
+  right: 0.5625rem;
+  top: -0.3375rem;
+  height: 0.3375rem;
+  width: 1.125rem;
+  background: rgb(66, 92, 119);
+  border-radius: 0.18rem;
 }
 
-.loading-text-shadow {
-  /* Тени в стиле нейроморфизма */
-  text-shadow: 
-    2px 2px 5px rgba(0, 0, 0, 1.0), /* Внешняя тень */
-    inset 0px 2px 4px rgba(255, 255, 255, 1.0), /* Внутренняя светлая тень сверху */
-    inset 0px -3px 6px rgba(0, 0, 0, 1.0); /* Внутренняя тень снизу */
-  color: #b0bbbb; /* Цвет текста для отображения теней */
-  z-index: 1;
+.preloader-battery:after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-right: 2.25rem solid transparent;
+  border-bottom: 4.05rem solid rgba(255, 255, 255, 0.32);
 }
 
-.loading-text {
-  color: transparent;
-  background: linear-gradient(to bottom, #0078d7 100%, transparent 0%);
-  background-repeat: no-repeat;
-  background-size: 100% 0%;
-  background-position: 0 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  z-index: 2;
+.cssload-liquid {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: rgb(113, 251, 133);
+  animation: load 2.59s infinite;
+}
+
+.cssload-liquid:before,
+.cssload-liquid:after {
+  content: '';
+  position: absolute;
+  top: -0.5rem;
+  height: 1.125rem;
+  width: 1.4625rem;
+  background: rgb(113, 251, 133);
+  opacity: 0;
+  border-radius: 50%;
+}
+
+.cssload-liquid:after {
+  right: 0;
+  animation: cssload-liquid-1 2.59s infinite;
+}
+
+.cssload-liquid:before {
+  left: 0;
+  animation: cssload-liquid-2 2.59s infinite;
+}
+
+@keyframes load {
+  0% { height: 0%; }
+  50% { height: 50%; }
+  100% { height: 0%; }
+}
+
+@keyframes cssload-liquid-1 {
+  0% { height: 0%; opacity: 0; }
+  50% { height: 50%; opacity: 1; }
+  100% { height: 0%; opacity: 0; }
+}
+
+@keyframes cssload-liquid-2 {
+  0% { height: 0%; opacity: 0; }
+  50% { height: 50%; opacity: 1; }
+  100% { height: 0%; opacity: 0; }
 }

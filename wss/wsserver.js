@@ -70,6 +70,8 @@
 // });
 /* Test servers for autobahn, run with ASAN. /exit route shuts down everything */
 const uWS = require('uWebSockets.js');
+const jwt = require('jsonwebtoken');
+const fs = require('fs');
 
 /* Keep track of all apps */
 let apps = [];
@@ -78,9 +80,11 @@ let closing = false;
 function listenWithSettings(settings) {
   /* These are our shared SSL options */
   let sslOptions = {
-    key_file_name: 'ssl/key.pem',
-    cert_file_name: 'ssl/cert.crt'
+    key_file_name: './ssl/misc/key.pem',
+    cert_file_name: './ssl/misc/cert.pem',
+    passphrase: '1234'
   };
+  console.log('SSL options: ' + JSON.stringify(sslOptions));
 
   /* Create the app */
   let app = settings.ssl ? uWS.SSLApp(sslOptions) : uWS.App(sslOptions);

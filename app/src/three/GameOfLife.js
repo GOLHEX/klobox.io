@@ -2,10 +2,10 @@
 import React, { Component, useState } from 'react';
 
 import * as THREE from 'three';
-import W from "../wrapper/W"
-import { MapControls, OrbitControls } from "./controls/OrbitControls";
+import W from "../wrapper/W.js"
+import { MapControls, OrbitControls } from "./controls/OrbitControls.js";
 import Stats from 'stats.js';
-import { Hex , OffsetCoord} from "../three/hex/Hex";
+import { Hex , OffsetCoord} from "../three/hex/Hex.js";
 import { GridHelper } from 'three';
 import e from 'cors';
 import { update } from 'lodash';
