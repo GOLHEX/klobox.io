@@ -1,14 +1,16 @@
-/*  Play.css */
-.play {
+.play-button {
+  background-color: #272727; /* цвет фона */
+  border-radius: 50%; /* скругление углов */
+  box-shadow: 
+    3px 5px 8px #1d1d1d, /* тёмная тень снизу справа */
+    -5px -8px 13px #353535; /* светлая тень сверху слева */
+  width: 64px; /* ширина */
+  height: 64px; /* высота */
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 50px;
-  width: 100px;
-  color: #fff;
-  background-color: #2ecc71;
-  border: none;
-  box-shadow: 0 0 3px 2px #cec7c759;
+  border-color: #313131;
+  border-width: 3px;
   cursor: pointer;
   transition: background-color 0.5s ease;
 }

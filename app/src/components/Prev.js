@@ -4,6 +4,7 @@ import './../tailwind/tailwind.css';
 import { random } from "nanoid";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faStepBackward } from "@fortawesome/free-solid-svg-icons";
+import './Play.css';
 
 class Prev extends React.Component {
   constructor(props) {
@@ -18,7 +19,7 @@ class Prev extends React.Component {
 
   render() {
     // стили и т.д.
-    const prevStyle = `prev`;
+    const prevStyle = `prev-button`;
     return (
       <button onClick={this.handlePrevClick} className={prevStyle}>
         <FontAwesomeIcon icon={faStepBackward} />
