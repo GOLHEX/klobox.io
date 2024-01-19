@@ -1,0 +1,11 @@
+.genocide-button {
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  height: 50px; 
+  width: 100px; 
+  color: rgb(17, 0, 255); 
+  box-shadow: rgba(206, 199, 199, 0.35) 0px 0px 3px 2px;
+}
+
+

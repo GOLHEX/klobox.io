@@ -1,0 +1,2 @@
+"use strict";(self.webpackChunkklobox=self.webpackChunkklobox||[]).push([[275],{275:(s,e,c)=>{c.r(e),c.d(e,{default:()=>a});c(390);var n=c(545),l=(c(625),c(559));const a=function(){const s=(0,n.s0)();return(0,l.jsx)("div",{className:"body",children:(0,l.jsx)("div",{class:"center",children:(0,l.jsx)("div",{class:"hexagon",onClick:()=>{s("/game")}})})})}}}]);
+//# sourceMappingURL=275.8d97f39f.chunk.js.map

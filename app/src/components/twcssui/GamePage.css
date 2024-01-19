@@ -1,0 +1,84 @@
+.bg-gray-200 {
+  background: #282828; /* Цвет фона страницы */
+  height: 100vh; /* Высота на весь экран */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.controls-container {
+  position: absolute;
+  bottom: 20%; /* Регулируйте в соответствии с вашим дизайном */
+  display: flex;
+  align-items: center;
+  gap: 15px; /* Отступы между кнопками */
+}
+
+/* Стилизация для кастомных компонентов кнопок */
+/* Обратите внимание, что сами компоненты должны применять эти классы */
+.prev, .play, .next, .genocide, .populate, .value-toggle, .camera-rot {
+  width: 60px; /* Диаметр кнопок */
+  height: 60px; /* Диаметр кнопок */
+  border-radius: 50%;
+  background-color: #6f42c1; /* Цвет фона кнопок */
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Тень для кнопок */
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+/* Дополнительные стили для кнопок при активном состоянии */
+.prev.active, .play.active, .next.active {
+  background-color: #9575cd; /* Светлее фон при активности */
+}
+
+/* Стили для адаптации размеров кнопок на маленьких экранах */
+@media (max-width: 768px) {
+  .prev, .play, .next, .genocide, .populate, .value-toggle, .camera-rot {
+    width: 50px; /* Меньший размер кнопок */
+    height: 50px; /* Меньший размер кнопок */
+    font-size: 1rem;
+  }
+}
+
+.value-toggle-button {
+  background-color: #444; /* Цвет фона кнопок */
+  border: none;
+  border-radius: 50%; /* Для круглой формы кнопки */
+  width: 48px; /* Диаметр кнопок */
+  height: 48px; /* Диаметр кнопок */
+  margin: 0 8px; /* Отступы между элементами */
+  display: inline-flex; /* Для выравнивания иконки по центру кнопки */
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2); /* Тень для кнопок */
+  color: white; /* Цвет иконок/текста */
+  font-size: 24px; /* Размер иконок/текста */
+  cursor: pointer;
+  transition: background-color 0.3s; /* Плавное изменение фона при наведении */
+}
+
+.value-toggle-button:hover {
+  background-color: #555; /* Цвет фона при наведении */
+}
+
+.value-toggle-button:active {
+  background-color: #666; /* Цвет фона при нажатии */
+}
+
+/* Стили для контейнера, включающего ValueToggleButton и его метку */
+.value-toggle-container {
+  display: flex;
+  align-items: center;
+  flex-direction: column; /* Вертикальное выравнивание элементов */
+}
+
+.value-toggle-label {
+  margin-top: 4px; /* Отступ метки от кнопки */
+  color: #fff; /* Цвет текста метки */
+  font-size: 16px; /* Размер текста метки */
+}
