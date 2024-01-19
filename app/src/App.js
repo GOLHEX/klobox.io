@@ -22,7 +22,7 @@ class App extends Component {
   }
 
   authenticate(){
-    return new Promise(resolve => setTimeout(resolve, 1618));
+    return new Promise(resolve => setTimeout(resolve, 3236));
   }
 
   componentDidMount(){
