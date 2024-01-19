@@ -1,35 +1,116 @@
-/* В файле global.css или аналогичном */
-.hexagon {
-  width: calc(150px * 0.645);
-  height: 150px;
-  background-image: linear-gradient(90deg, #00ffb8, #13ce9a);
-  border-radius: 15px; /* 150px / 10 */
-  transition: transform 400ms ease;
+/* Cool share button made by: csozi | Website: english.csozi.hu*/
+
+.buttons {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: fit-content;
+  width: fit-content;
+  transition: 0.3s;
+  border-radius: 50%;
 }
 
-/* Нет прямой поддержки псевдоэлементов в Tailwind, поэтому используйте обычный CSS */
-.hexagon:before, .hexagon:after {
-  content: '';
+.buttons:hover {
+  padding: 60px;
+}
+
+.buttons:hover .button {
+  box-shadow: 5px 5px 12px #cacaca, -5px -5px 12px #ffffff;
+}
+
+.main-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  border: none;
+  background: #e8e8e8;
+  box-shadow: 5px 5px 12px #cacaca, -5px -5px 12px #ffffff;
+  border-radius: 50%;
+  transition: 0.2s;
+  z-index: 100;
+}
+
+.button {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  width: inherit;
-  height: inherit;
-  background-image: inherit;
-  border-radius: inherit;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  border: none;
+  background: #e8e8e8;
+  box-shadow: 5px 5px 12px rgba(202, 202, 202, 0), -5px -5px 12px rgba(255, 255, 255, 0);
+  transition: 0.3s;
+  border-radius: 50%;
 }
 
-.hexagon:before {
-  transform: rotate(60deg);
+.discord-button:hover {
+  background: #5865F2;
 }
 
-.hexagon:after {
-  transform: rotate(-60deg);
+.buttons:hover .discord-button {
+  translate: 70px 0px;
+  box-shadow: 5px 5px 12px #cacaca, -5px -5px 12px #ffffff;
 }
 
-/* Для использования Tailwind, класс 'center' может быть добавлен в глобальные стили */
-.center {
-  @apply fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2;
+.twitter-button:hover {
+  background: #1CA1F1;
+}
+
+.buttons:hover .twitter-button {
+  translate: 47px -47px;
+  box-shadow: 5px 5px 12px #cacaca, -5px -5px 12px #ffffff;
+}
+
+.reddit-button:hover {
+  background: #FF4500;
+}
+
+.buttons:hover .reddit-button {
+  translate: 0px -70px;
+  box-shadow: 5px 5px 12px #cacaca, -5px -5px 12px #ffffff;
+}
+
+.messenger-button:hover {
+  background: #0093FF;
+}
+
+.buttons:hover .messenger-button {
+  translate: -47px -47px;
+  box-shadow: 5px 5px 12px #cacaca, -5px -5px 12px #ffffff;
+}
+
+.pinterest-button:hover {
+  background: #F0002A;
+}
+
+.buttons:hover .pinterest-button {
+  translate: -70px 0px;
+  box-shadow: 5px 5px 12px #cacaca, -5px -5px 12px #ffffff;
+}
+
+.instagram-button:hover {
+  background: #F914AF;
+}
+
+.buttons:hover .instagram-button {
+  translate: -47px 47px;
+  box-shadow: 5px 5px 12px #cacaca, -5px -5px 12px #ffffff;
+}
+
+.snapchat-button:hover {
+  background: #FFFC00;
+}
+
+.buttons:hover .snapchat-button {
+  translate: 0px 70px;
+  box-shadow: 5px 5px 12px #cacaca, -5px -5px 12px #ffffff;
+}
+
+.whatsapp-button:hover {
+  background: #25D366;
+}
+
+.buttons:hover .whatsapp-button {
+  translate: 47px 47px;
+  box-shadow: 5px 5px 12px #cacaca, -5px -5px 12px #ffffff;
 }

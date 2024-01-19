@@ -2,6 +2,7 @@ import React, { Component } from "react";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlay, faPause } from '@fortawesome/free-solid-svg-icons';
 import './../tailwind/tailwind.css';
+import './Play.css';
 
 class Play extends Component {
   constructor(props) {
@@ -19,7 +20,7 @@ class Play extends Component {
 
   
   render() {
-    const playStyle = `play ${!this.state.isPlay ? '' : 'inactive'}`;
+    const playStyle = `play-button`;
     return (
       <button onClick={this.isPlayClick} className={playStyle}>
         {this.state.isPlay ? <FontAwesomeIcon icon={faPause} /> : <FontAwesomeIcon icon={faPlay} />}
