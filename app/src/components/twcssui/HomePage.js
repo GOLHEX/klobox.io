@@ -15,12 +15,10 @@ function HomePage() {
   };
 
   return (
-    <div className="home-page preloader-containe" style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", width: "100%"}}>
+    <div className="home-page preloader-containe red" style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", width: "100%"}}>
     <div className="buttons">
       <button className="main-button">
-        <svg width="30" height="30" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M15.75 5.125a3.125 3.125 0 1 1 .754 2.035l-8.397 3.9a3.124 3.124 0 0 1 0 1.88l8.397 3.9a3.125 3.125 0 1 1-.61 1.095l-8.397-3.9a3.125 3.125 0 1 1 0-4.07l8.397-3.9a3.125 3.125 0 0 1-.144-.94Z"></path>
-        </svg>
+
       </button>
       <button className="discord-button button" style={{ transitionDelay: "0s, 0s, 0s", transitionProperty: "translate, background, box-shadow" }}>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" height="30" width="30">

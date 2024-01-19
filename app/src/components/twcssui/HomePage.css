@@ -1,5 +1,4 @@
 /* Cool share button made by: csozi | Website: english.csozi.hu*/
-
 .buttons {
   position: relative;
   display: grid;
@@ -21,7 +20,7 @@
   display: grid;
   place-items: center;
   padding: 10px;
-  border: none;
+  border: 50%;
   background: #e8e8e8;
   box-shadow: 5px 5px 12px #cacaca, -5px -5px 12px #ffffff;
   border-radius: 50%;

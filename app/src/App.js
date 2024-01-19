@@ -1,19 +1,8 @@
 import React, { Component, Suspense, lazy } from "react";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
-// import Env from "./three/Env";
 import W from "./wrapper/W.js";
-// import GOL from "./three/GameOfLife";
-// import UserProfile from "./components/UserProfile";
-// import Play from "./components/Play";
-import Preloader from "./components/Preloader.js"; // Убедитесь, что импортирован правильно
-// import Next from "./components/Next";
-// import Prev from "./components/Prev";
-// import Genocide from "./components/Genocide";
-// import Populate from "./components/Populate";
-// import ValueToggleButton from "./components/ValueToggleButton";
-// import Labels from "./components/Labels";
-// import CameraRot from "./components/CameraRot";
-import './tailwind/tailwind.css'
+import Preloader from "./components/Preloader.js";
+import './tailwind/tailwind.css';
 
 // Ленивая загрузка страниц, можно также использовать для Preloader
 const HomePage = lazy(() => import('./components/twcssui/HomePage.js'));
@@ -21,6 +10,7 @@ const LoginPage = lazy(() => import('./components/twcssui/LoginPage.js'));
 const SignUpPage = lazy(() => import('./components/twcssui/SignUpPage.js'));
 const ProfilePage = lazy(() => import('./components/twcssui/ProfilePage.js'));
 const GamePage = lazy(() => import('./components/twcssui/GamePage.js'));
+
 
 class App extends Component {
   constructor(props){
