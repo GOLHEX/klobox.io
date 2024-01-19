@@ -4,8 +4,6 @@
   position: relative;
   display: grid;
   place-items: center;
-  height: fit-content;
-  width: fit-content;
   transition: 0.3s;
   border-radius: 50%;
 }
