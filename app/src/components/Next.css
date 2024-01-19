@@ -1,11 +1,28 @@
 .next-button {
-  display: flex; 
-  align-items: center; 
-  justify-content: center; 
-  height: 50px; 
-  width: 100px; 
-  color: red; 
-  box-shadow: rgba(206, 199, 199, 0.35) 0px 0px 3px 2px;
+  position: relative;
+  background-color: #272727; /* цвет фона */
+  border-radius: 50%;
+  box-shadow: 
+    3px 5px 8px #1d1d1d, /* тёмная тень снизу справа */
+    -5px -8px 13px #353535; /* светлая тень сверху слева */
+  width: 48px; /* ширина */
+  height: 48px; /* высота */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-color: #313131;
+  border-width: 3px;
+  transition: box-shadow 0.2s ease-in-out;
 }
 
+.next-button:active {
+  box-shadow: 
+    inset 4px 4px 6px #1d1d1d, /* внутренняя тёмная тень */
+    inset -4px -4px 6px #353535; /* внутренняя светлая тень */
+}
 
+.next-button img {
+  width: 32px; /* ширина иконки */
+  height: 32px; /* высота иконки */
+}

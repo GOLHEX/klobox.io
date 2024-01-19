@@ -18,7 +18,7 @@ class Next extends React.Component {
 
   render() {
     // стили и т.д.
-    const nextStyle = `next`;
+    const nextStyle = `next-button`;
     return (
       <button onClick={this.handleNextClick} className={nextStyle}>
         <FontAwesomeIcon icon={faStepForward} />

@@ -119,7 +119,7 @@ class GOL extends React.Component {
         //this.stats.showPanel( 0 ); // 0: fps, 1: ms, 2: mb, 3+: custom
         //document.body.appendChild( this.stats.dom );
 
-        this.state.scene.background = new THREE.Color().set('#795548');
+        this.state.scene.background = new THREE.Color().set('#272727');
         this.state.scene.fog = new THREE.Fog( this.state.scene.background, 200, 1000 );
         // LIGHTS
         this.hemiLight = new THREE.HemisphereLight( 0xffffff, 0xffffff, 0.1 );
@@ -686,7 +686,7 @@ class GOL extends React.Component {
                 hexMesh.position.set(cube.x, cube.y, 0.1);
                 hexMesh.name = `cell_${q}_${r}_${s}`;
                 hexMesh.cube = cube;
-                hexMesh.scale.set(0.97, 0.97, 1); // Уменьшаем размер шестиугольника, чтобы избежать перекрытия
+                hexMesh.scale.set(0.95, 0.95, 1); // Уменьшаем размер шестиугольника, чтобы избежать перекрытия
                 this.gridGroup.add(hexMesh);
                 newCellsMap.push(hexMesh); // Добавляем mesh во временный массив
                 //grid.push(hexMesh);
