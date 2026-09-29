@@ -422,6 +422,7 @@ uniform vec3 uPaper;
 uniform vec3 uInkCol;
 uniform vec2 uHatchOff;
 uniform float uNight;
+uniform vec3 uCutScreen;
 ${COMMON}
 float D(vec2 uv) { return texture(tDepth, uv).r * uRange; }
 void main() {
@@ -455,6 +456,12 @@ void main() {
     // pressure varies along a stroke
     edge *= 0.75 + 0.25 * vnoise(px / 9.0);
     vec3 col = texture(tColor, vUv).rgb;
+    // inside a cut solid: a section, cross-hatched like an architect's drawing
+    if (uCutScreen.z > 0.0 && n0.a < 0.5 && length(gl_FragCoord.xy - uCutScreen.xy) < uCutScreen.z) {
+        float h = abs(fract((px.x + px.y) / 7.0) - 0.5) * 7.0;
+        float h2 = abs(fract((px.x - px.y) / 11.0) - 0.5) * 11.0;
+        col = mix(col * vec3(0.9, 0.88, 0.84), uInkCol, (1.0 - smoothstep(0.4, 1.2, h)) * 0.55 + (1.0 - smoothstep(0.4, 1.2, h2)) * 0.25);
+    }
     col = mix(col, uInkCol, edge * 0.92);
     // paper: grain and fibres, a warm vignette
     float g = hash(floor(gl_FragCoord.xy)) * 0.5 + vnoise(gl_FragCoord.xy / 3.0) * 0.5;
@@ -590,7 +597,7 @@ export class View {
             uniforms: {
                 tColor: { value: this.rt.textures[0] }, tNormal: { value: this.rt.textures[1] }, tDepth: { value: this.rt.depthTexture },
                 uTexel: { value: new THREE.Vector2() }, uRange: { value: 259 }, uLine: { value: 1 }, uPaper: this.U.uPaper, uInkCol: this.U.uInkCol,
-                uHatchOff: this.U.uHatchOff, uNight: this.U.uNight,
+                uHatchOff: this.U.uHatchOff, uNight: this.U.uNight, uCutScreen: { value: new THREE.Vector3() },
             },
         }));
         this.post.frustumCulled = false;
@@ -810,7 +817,7 @@ export class View {
         const { W, D } = this.world;
         const f = this.focus;
         const aspect = this.width / this.height;
-        const R = this.zoom * Math.max(aspect, 1) * 1.45 + 12;
+        const R = Math.max(this.zoom * Math.max(aspect, 1), this.halfH ?? this.zoom) * 1.45 + 12;
         const ccx = Math.floor(f.x / CH);
         const ccy = Math.floor(f.y / (SQ3 / 2) / CH);
         const n = Math.ceil(R / CH) + 1;
@@ -1077,11 +1084,15 @@ export class View {
         this.zoom += (this.zoomTarget - this.zoom) * (1 - Math.exp(-dt * 8));
         this.focus.lerp(this.focusTarget, 1 - Math.exp(-dt * 7));
         const c = this.cam;
+        // landscape keeps the height, portrait shows a little more width than it would
         const aspect = this.width / this.height;
-        c.left = -this.zoom * aspect;
-        c.right = this.zoom * aspect;
-        c.top = this.zoom;
-        c.bottom = -this.zoom;
+        const halfW = aspect >= 1 ? this.zoom * aspect : this.zoom * 0.82;
+        const halfH = halfW / aspect;
+        this.halfH = halfH;
+        c.left = -halfW;
+        c.right = halfW;
+        c.top = halfH;
+        c.bottom = -halfH;
         const D = 110;
         const f = this.focus;
         const fwd = [Math.cos(this.az), Math.sin(this.az)];
@@ -1095,7 +1106,7 @@ export class View {
         c.getWorldDirection(this.U.uCamFwd.value);
         this.U.uCamRight.value.set(Math.sin(this.az), -Math.cos(this.az));
         this.U.uCamUp.value.set(Math.cos(this.az), Math.sin(this.az));
-        this.partMat.uniforms.uScale.value = this.dpr * this.scale * (9 / this.zoom);
+        this.partMat.uniforms.uScale.value = this.dpr * this.scale * (9 / halfH) * (this.height / 760);
         // pin the hatching to the world: where does the world origin land on the page?
         const o = new THREE.Vector3(0, 0, 0).project(c);
         this.U.uHatchOff.value.set(-(o.x * 0.5 + 0.5) * this.pw, -(o.y * 0.5 + 0.5) * this.ph);
@@ -1143,6 +1154,42 @@ export class View {
             const k = Math.floor(pz / LAYER);
             if (k >= w.H) break;
             if (w.solid(q, r, k)) return true;
+        }
+        return false;
+    }
+
+    // tall props or trees between the hero and the camera
+    propOccluded(x, y, z) {
+        const d = this.U.uCamFwd.value;
+        const test = (px, py, pz, h) => {
+            if (pz + h < z + 1.3 || pz > z + 4) return false;
+            const dx = px - x;
+            const dy = py - y;
+            const dz = pz + h * 0.6 - z;
+            const along = dx * d.x + dy * d.y + dz * d.z;
+            if (along > -0.3) return false;
+            const ex = dx - along * d.x;
+            const ey = dy - along * d.y;
+            const ez = dz - along * d.z;
+            return Math.hypot(ex, ey, ez) < 1.4;
+        };
+        const tall = { palm: 3, tree: 2.6, autumn_tree: 2.4, lamppost: 2, stall: 1.6, well: 1.8, tent: 1.3, pylon: 1.4, antenna: 1.2, galleon: 5 };
+        const [q, r] = hexAt(x, y);
+        for (const k of [this.chunkKey(q, r), this.chunkKey(q - 8, r), this.chunkKey(q + 8, r), this.chunkKey(q, r - 8), this.chunkKey(q, r + 8)]) {
+            for (const p of this.propsByChunk.get(k) ?? []) {
+                const h = tall[p.kind];
+                if (!h) continue;
+                const [px, py] = center(p.q, p.r);
+                if (Math.abs(px - x) > 5 || Math.abs(py - y) > 5) continue;
+                if (test(px, py, p.z * LAYER, h)) return true;
+            }
+        }
+        for (const [, m] of this.nodes) {
+            const n = m.userData.node;
+            if (!m.visible || (n.kind !== 'tree' && n.kind !== 'palm')) continue;
+            const [px, py] = center(n.q, n.r);
+            if (Math.abs(px - x) > 5 || Math.abs(py - y) > 5) continue;
+            if (test(px, py, n.h * LAYER, 3)) return true;
         }
         return false;
     }
@@ -1205,10 +1252,16 @@ export class View {
         this.updateCamera(dt);
         this.ensureChunks(this.frame < 3 || this.loadAll ? 400 : 3);
         this.loadAll = false;
-        // cutaway when walls stand in the way
-        const want = hero && this.occluded(hero.x, hero.y, hero.z) ? 2.8 : 0;
+        // cutaway when walls stand in the way; a small window through trees and lamps
+        const want = !hero ? 0 : this.occluded(hero.x, hero.y, hero.z) ? 2.8 : this.propOccluded(hero.x, hero.y, hero.z) ? 1.5 : 0;
         this.cut += (want - this.cut) * (1 - Math.exp(-dt * 6));
         if (hero) this.U.uCut.value.set(hero.x, hero.y, hero.z, this.cut < 0.05 ? 0 : this.cut);
+        const cs = this.post.material.uniforms.uCutScreen.value;
+        if (hero && this.cut > 0.05) {
+            const [sx, sy] = this.project(hero.x, hero.y, hero.z + 1.5);
+            const k = this.dpr;
+            cs.set(sx * k, (this.height - sy) * k, ((this.cut * this.height * k) / (2 * this.halfH)) * 1.05);
+        } else cs.z = 0;
         this.updateLights();
         if (this.dynLights) {
             const L = this.U.uLights.value;
@@ -1228,7 +1281,7 @@ export class View {
     renderShadows() {
         const f = this.focus;
         const sc = this.shadowCam;
-        const ext = this.zoom * Math.max(1, this.width / this.height) * 1.25 + 6;
+        const ext = Math.max(this.zoom * Math.max(1, this.width / this.height), this.halfH ?? this.zoom) * 1.25 + 6;
         sc.left = -ext;
         sc.right = ext;
         sc.top = ext;

@@ -362,14 +362,14 @@ export function start() {
         return mm;
     };
     const LOOT = { type: 'loot', key: 'loot' };
-    const SHIP = { type: 'ship', opts: {}, key: 'ship' };
+    const SHIP = { type: 'ship', opts: {}, key: 'ship', scale: 1.25 };
 
     const syncActors = (g, dt) => {
         const h = g.hero;
         const hb = h.body;
         const screen = [];
         ctx.screen = screen;
-        const vis = (x, y) => Math.hypot(x - view.focus.x, y - view.focus.y) < view.zoom * 2.6 + 6;
+        const vis = (x, y) => Math.hypot(x - view.focus.x, y - view.focus.y) < Math.max(view.zoom * Math.max(1, view.width / view.height), view.halfH ?? view.zoom) * 1.9 + 6;
         const hovered = ctx.hover;
         // the hero
         view.actor({

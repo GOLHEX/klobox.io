@@ -71,7 +71,7 @@ export class UI {
 
     log(text, kind = 'info') {
         const el = document.createElement('div');
-        el.className = kind;
+        el.className = 'l-' + kind;
         el.textContent = text;
         const box = $('log');
         box.appendChild(el);
