@@ -1,4 +1,4 @@
-import { buildHexHealpix, healpixFaceToSphere, relaxPositions, stepLife } from './HexHealpix.js';
+import { buildHexHealpix, healpixFaceToSphere, healpixRingZ, relaxPositions, stepLife } from './HexHealpix.js';
 
 const latLon = (grid, c) => {
     const [x, y, z] = grid.positions.subarray(c * 3, c * 3 + 3);
@@ -75,6 +75,26 @@ describe('buildHexHealpix', () => {
         for (let c = 0; c < grid.count; c++) {
             expect(Math.hypot(relaxed[c * 3], relaxed[c * 3 + 1], relaxed[c * 3 + 2])).toBeCloseTo(1, 9);
         }
+    });
+
+    it('groups cells into HEALPix iso-latitude rings with evenly spaced cells', () => {
+        const N = 5;
+        const grid = buildHexHealpix(N);
+        const rings = Array.from({ length: 4 * N + 1 }, () => []);
+        for (let c = 0; c < grid.count; c++) rings[grid.ring[c]].push(c);
+        rings.forEach((cells, r) => {
+            const nr = Math.min(r, N, 4 * N - r);
+            expect(cells.length).toBe(nr === 0 ? 1 : 4 * nr);
+            const phis = cells.map((c) => {
+                expect(grid.positions[c * 3 + 2]).toBeCloseTo(healpixRingZ(r / N), 12);
+                return Math.atan2(grid.positions[c * 3 + 1], grid.positions[c * 3]);
+            });
+            if (cells.length > 1) {
+                phis.sort((a, b) => a - b);
+                const step = (2 * Math.PI) / cells.length;
+                phis.forEach((p, k) => expect(p - phis[0]).toBeCloseTo(k * step, 9));
+            }
+        });
     });
 
     it('maps HEALPix face corners to the poles', () => {

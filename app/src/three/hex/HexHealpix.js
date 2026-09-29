@@ -28,22 +28,20 @@ export function isPolarFace(face) {
     return face < 4 || face > 7;
 }
 
+// z = cos(colatitude) of the HEALPix iso-latitude ring at ring coordinate jr in
+// [0, 4] (0 = north pole, 2 = equator, 4 = south pole). Continuous in jr.
+export function healpixRingZ(jr) {
+    if (jr < 1) return 1 - (jr * jr) / 3;
+    if (jr > 3) return ((4 - jr) * (4 - jr)) / 3 - 1;
+    return (2 - jr) * (2 / 3);
+}
+
 // Continuous HEALPix map: base face + (x, y) in [0,1]^2 -> unit vector.
 // (x, y) = (1, 1) of faces 0-3 is the north pole, (0, 0) of faces 8-11 the south pole.
 export function healpixFaceToSphere(face, x, y) {
     const jr = JRLL[face] - x - y; // ring coordinate in [0, 4], 0 = north pole
-    let z;
-    let nr;
-    if (jr < 1) {
-        nr = jr;
-        z = 1 - (jr * jr) / 3;
-    } else if (jr > 3) {
-        nr = 4 - jr;
-        z = (nr * nr) / 3 - 1;
-    } else {
-        nr = 1;
-        z = (2 - jr) * (2 / 3);
-    }
+    const z = healpixRingZ(jr);
+    const nr = Math.min(jr, 1, 4 - jr);
     const phi = nr > 0 ? (Math.PI / 4) * (JPLL[face] + (x - y) / nr) : 0;
     const rho = Math.sqrt(Math.max(0, 1 - z * z));
     return [rho * Math.cos(phi), rho * Math.sin(phi), z];
@@ -84,6 +82,7 @@ export function buildHexHealpix(N) {
     const faceIndex = new Int32Array(FACE_COUNT * (N + 1) * (N + 1));
     const positions = new Float64Array(count * 3);
     const home = new Int32Array(count * 3); // face, i, j where the cell was first met
+    const ring = new Int32Array(count); // iso-latitude ring, 0 (north pole) .. 4N (south pole)
     let next = 0;
 
     for (let f = 0; f < FACE_COUNT; f++) {
@@ -96,6 +95,7 @@ export function buildHexHealpix(N) {
                     index.set(key, id);
                     positions.set(healpixFaceToSphere(f, i / N, j / N), id * 3);
                     home.set([f, i, j], id * 3);
+                    ring[id] = JRLL[f] * N - i - j;
                 }
                 faceIndex[(f * (N + 1) + i) * (N + 1) + j] = id;
             }
@@ -173,7 +173,7 @@ export function buildHexHealpix(N) {
         });
     }
 
-    return { N, count, positions, neighbors, degree, triangles, home, cellAt };
+    return { N, count, positions, neighbors, degree, triangles, home, ring, cellAt };
 }
 
 // HEALPix positions give (almost exactly) equal-area cells but stretched hexagons.
