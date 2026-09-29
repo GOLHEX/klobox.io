@@ -52,12 +52,16 @@ canvas#view { position: absolute; inset: 0; width: 100%; height: 100%; display: 
 .btn.gold { background: var(--mustard); color: var(--ink); box-shadow: 3px 3px 0 var(--ink); }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-.marker { position: absolute; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; }
+.flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, transparent 45%, rgba(216,80,63,0.85) 100%); }
+.hearts.low i:not(.empty) { animation: beat 0.8s infinite; }
+@keyframes beat { 50% { opacity: 0.35; } }
+.marker, .prompt { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; will-change: transform; }
 .marker .tag { font-size: 11px; padding: 4px 6px; }
 .marker::after { content: ""; width: 2px; height: 12px; background: var(--tag); }
 .marker.seal .tag { background: #1f5f5a; }
 .marker.gate .tag { background: #4a3a8a; }
-.prompt { position: absolute; transform: translate(-50%, -100%); }
+.marker.you .tag { background: var(--red); }
+.prompt::after { content: none; }
 .prompt .tag { background: var(--mustard); color: var(--ink); font-size: 12px; box-shadow: 2px 2px 0 var(--ink); }
 .pop { position: absolute; transform: translate(-50%, -50%); font: 800 16px/1 var(--font); color: #fff; -webkit-text-stroke: 3px var(--ink); paint-order: stroke; transition: transform 0.9s ease-out, opacity 0.9s ease-in; }
 .log { position: absolute; left: 50%; transform: translateX(-50%); bottom: 150px; display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; }
@@ -78,6 +82,7 @@ canvas#view { position: absolute; inset: 0; width: 100%; height: 100%; display: 
 .pad .use:disabled { opacity: 0.4; }
 .drinks { position: absolute; left: max(12px, env(safe-area-inset-left)); bottom: max(14px, env(safe-area-inset-bottom)); display: flex; gap: 6px; }
 .touch-only { display: none; }
+.mapping .stick, .mapping .pad, .mapping .drinks { visibility: hidden; }
 @media (hover: none), (pointer: coarse) { .touch-only { display: block; } .desk-only { display: none !important; } }
 /* cards */
 .overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(14,12,22,0.55); padding: 16px; z-index: 5; }
@@ -109,6 +114,7 @@ canvas#view { position: absolute; inset: 0; width: 100%; height: 100%; display: 
 <body>
 <div class="game" id="game">
   <canvas id="view" aria-label="Мир-разрез в изометрии: ярусы один под другим"></canvas>
+  <div class="flash" id="flash"></div>
   <div class="labels" id="labels"></div>
   <div class="hud" id="hud">
     <span class="tag" id="depth">Разрез 1 · ярус 1</span>
@@ -174,8 +180,10 @@ const store = {
 };
 
 const canvas = $('view');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+// resolution follows the frame rate: sharp when the device keeps up, softer when it does not
+const quality = { max: Math.min(devicePixelRatio, 2), pr: Math.min(devicePixelRatio, 1.75), acc: 0, n: 0 };
+renderer.setPixelRatio(quality.pr);
 renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
 const view = new View(renderer);
 let game = null;
@@ -329,6 +337,7 @@ function hud() {
   hudKey = key;
   $('depth').textContent = `Разрез ${game.depth} · ярус ${game.tier + 1}/${game.loc.tiers.length}`;
   $('hearts').innerHTML = Array.from({ length: h.maxHp }, (_, i) => `<i class="${i < h.hp ? '' : 'empty'}"></i>`).join('');
+  $('hearts').classList.toggle('low', h.hp <= 2);
   [...$('seals').children].forEach((el, i) => el.classList.toggle('on', i < h.seals));
   $('purse').textContent = `монеты ${h.coins} · ключи ${h.keys} · меч ${h.dmg}`;
   $('clock').innerHTML = `${time === 'ночь' ? '☾' : '☀'} <span class="word">${time}</span>`;
@@ -376,14 +385,12 @@ $('relic-card').addEventListener('click', () => ($('relic-card').hidden = true))
 
 // markers over things worth finding, and the prompt over what can be used now
 const PROMPT = { chest: 'открыть сундук', lever: 'дёрнуть рычаг', pedestal: 'взять', campfire: 'отдохнуть у костра', sign: 'прочесть', merchant: 'торговать', gate: 'Врата' };
-let markers = [];
-let promptEl = null;
 function markerList() {
   const out = [];
   const g = game;
   for (const c of g.chests) if (!c.opened && c.loot.includes('seal')) out.push({ at: [c.x + 0.5, c.y + 0.5, c.z + 1.1], text: 'Печать · сундук', cls: 'seal' });
   for (const p of g.pedestals) if (!p.taken) out.push({ at: [p.x + 0.5, p.y + 0.5, p.z + 1.8], text: p.seal ? 'Печать' : 'реликвия', cls: p.seal ? 'seal' : '' });
-  for (const c of g.creatures) if (c.hp > 0 && c.elite) out.push({ at: () => [c.x, c.y, c.z + 1.8 * c.scale], text: c.name, cls: c.carry.includes('seal') ? 'seal' : '' });
+  for (const c of g.creatures) if (c.hp > 0 && c.elite) out.push({ at: () => [c.x, c.y, c.z + 1.8 * c.scale], text: () => `${c.name} ${'▮'.repeat(Math.ceil((c.hp / c.maxHp) * 6))}${'▯'.repeat(6 - Math.ceil((c.hp / c.maxHp) * 6))}`, cls: c.carry.includes('seal') ? 'seal' : '' });
   for (const c of g.campfires) out.push({ at: [c.x + 0.5, c.y + 0.5, c.z + 1.4], text: c.lit ? 'костёр' : 'костёр · отдых', cls: '' });
   if (g.merchant) out.push({ at: [g.merchant.x + 0.5, g.merchant.y + 0.5, g.merchant.z + 1.8], text: 'торговец', cls: '' });
   for (const l of g.levers) if (!l.on) out.push({ at: [l.x + 0.5, l.y + 0.5, l.z + 1.2], text: 'рычаг', cls: '' });
@@ -391,50 +398,43 @@ function markerList() {
   for (const it of g.items) if (!it.taken && it.kind === 'key') out.push({ at: [it.x + 0.5, it.y + 0.5, it.h + 1], text: 'ключ', cls: '' });
   return out;
 }
+// a pool of tags reused every frame instead of rebuilding the DOM
+const pool = [];
+function tagAt(i, cls, text, x, y) {
+  let el = pool[i];
+  if (!el) { el = document.createElement('div'); el.innerHTML = '<span class="tag"></span>'; $('labels').append(el); pool[i] = el; }
+  if (el.className !== cls) el.className = cls;
+  if (el.firstChild.textContent !== text) el.firstChild.textContent = text;
+  el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
+  el.hidden = false;
+}
 function updateMarkers() {
-  const box = $('labels');
-  for (const m of markers) m.el.remove();
-  markers = [];
-  promptEl?.remove();
-  if (state !== 'play') return;
-  const b = game.body;
-  const clip = view.U.uClipZ.value;
-  const far = mapMode ? 200 : 15;
-  for (const m of markerList()) {
-    const at = typeof m.at === 'function' ? m.at() : m.at;
-    if (Math.hypot(at[0] - b.x, at[1] - b.y) > far || at[2] - 1.5 > clip) continue;
-    if (!mapMode && Math.abs(at[2] - b.z) > 9) continue;
-    const [x, y] = view.toScreen(...at);
-    if (x < -60 || y < -30 || x > innerWidth + 60 || y > innerHeight + 30) continue;
-    const el = document.createElement('div');
-    el.className = `marker ${m.cls}`;
-    el.innerHTML = `<span class="tag"></span>`;
-    el.firstChild.textContent = m.text;
-    el.style.left = x + 'px'; el.style.top = y + 'px';
-    box.append(el);
-    markers.push({ el });
+  let n = 0;
+  if (state === 'play') {
+    const b = game.body;
+    const clip = view.U.uClipZ.value;
+    const far = mapMode ? 200 : 15;
+    for (const m of markerList()) {
+      const at = typeof m.at === 'function' ? m.at() : m.at;
+      if (Math.hypot(at[0] - b.x, at[1] - b.y) > far || at[2] - 1.5 > clip) continue;
+      if (!mapMode && Math.abs(at[2] - b.z) > 9) continue;
+      const [x, y] = view.toScreen(...at);
+      if (x < -60 || y < -30 || x > innerWidth + 60 || y > innerHeight + 30) continue;
+      tagAt(n++, `marker ${m.cls}`, typeof m.text === 'function' ? m.text() : m.text, x, y);
+    }
+    if (mapMode) { const [x, y] = view.toScreen(b.x, b.y, b.z + 1.6); tagAt(n++, 'marker you', 'ты', x, y); }
+    // the use prompt
+    const t = game.nearest();
+    $('use').disabled = !t;
+    const label = t ? (t.kind === 'pedestal' ? 'ВЗЯТЬ' : t.kind === 'chest' ? 'ОТКРЫТЬ' : t.kind === 'lever' ? 'РЫЧАГ' : t.kind === 'campfire' ? 'ОТДЫХ' : t.kind === 'merchant' ? 'ТОРГ' : t.kind === 'sign' ? 'ЧИТАТЬ' : 'ВРАТА') : 'ВЗЯТЬ';
+    if ($('use').textContent !== label) $('use').textContent = label;
+    if (t && !mapMode) {
+      const [x, y] = view.toScreen(t.x + 0.5, t.y + 0.5, t.z + (t.kind === 'gate' ? 3.4 : 1.5));
+      const touch = matchMedia('(pointer: coarse)').matches;
+      tagAt(n++, 'prompt', `${touch ? '' : 'E · '}${PROMPT[t.kind]}${t.kind === 'chest' && t.ref.locked ? ' (заперт)' : ''}`, x, y - 22);
+    }
   }
-  if (mapMode) {
-    const [x, y] = view.toScreen(b.x, b.y, b.z + 1.6);
-    const el = document.createElement('div');
-    el.className = 'marker';
-    el.innerHTML = '<span class="tag" style="background:#d8503f">ты</span>';
-    el.style.left = x + 'px'; el.style.top = y + 'px';
-    box.append(el);
-    markers.push({ el });
-  }
-  // the use prompt
-  const t = game.nearest();
-  $('use').disabled = !t;
-  $('use').textContent = t ? (t.kind === 'pedestal' ? 'ВЗЯТЬ' : t.kind === 'chest' ? 'ОТКРЫТЬ' : t.kind === 'lever' ? 'РЫЧАГ' : t.kind === 'campfire' ? 'ОТДЫХ' : t.kind === 'merchant' ? 'ТОРГ' : t.kind === 'sign' ? 'ЧИТАТЬ' : 'ВРАТА') : 'ВЗЯТЬ';
-  if (t && !mapMode) {
-    if (!promptEl) { promptEl = document.createElement('div'); promptEl.className = 'prompt'; promptEl.innerHTML = '<span class="tag"></span>'; }
-    const [x, y] = view.toScreen(t.x + 0.5, t.y + 0.5, t.z + (t.kind === 'gate' ? 3.4 : 1.5));
-    const touch = matchMedia('(pointer: coarse)').matches;
-    promptEl.firstChild.textContent = `${touch ? '' : 'E · '}${PROMPT[t.kind]}${t.kind === 'chest' && t.ref.locked ? ' (заперт)' : ''}`;
-    promptEl.style.left = x + 'px'; promptEl.style.top = (y - 22) + 'px';
-    box.append(promptEl);
-  }
+  for (let i = n; i < pool.length; i++) pool[i].hidden = true;
 }
 
 // ---------------------------------------------------------------- events from the simulation
@@ -446,7 +446,7 @@ function handle(events) {
       case 'impact': sound.tone(150, 0.08, 'square', 0.05, 80); break;
       case 'hit': { const c = game.creatures.find((x) => x.id === e.id); if (c) { pop(`-${e.dmg}`, c.x, c.y, c.z + 1.2); view.particles.burst('spark', c.x, c.y, c.z + 0.5, 9, 3); view.shake(0.25); } break; }
       case 'kill': { const c = game.creatures.find((x) => x.id === e.id); if (c) view.particles.burst('poof', c.x, c.y, c.z + 0.4, 12, 1.6, 0.6); log(e.elite ? `Повержен: ${e.name}` : `Побеждён: ${KINDS[e.kind]?.name ?? e.kind}`); sound.tone(280, 0.3, 'sawtooth', 0.05, 70); break; }
-      case 'hurt': pop(`-${e.dmg}`, b.x, b.y, b.z + 1.6, '#ff8a7a'); sound.tone(110, 0.2, 'sawtooth', 0.08, 55); view.shake(0.6); break;
+      case 'hurt': pop(`-${e.dmg}`, b.x, b.y, b.z + 1.6, '#ff8a7a'); sound.tone(110, 0.2, 'sawtooth', 0.08, 55); view.shake(0.6); flash(); break;
       case 'windup': break;
       case 'spit': sound.noise(0.2, 400, 0.05); break;
       case 'jump': case 'hop': sound.tone(300, 0.08, 'triangle', 0.03, 480); break;
@@ -489,6 +489,11 @@ function handle(events) {
   }
   hud();
 }
+function flash() {
+  const f = $('flash');
+  f.style.transition = 'none'; f.style.opacity = '0.55';
+  requestAnimationFrame(() => { f.style.transition = 'opacity 0.5s'; f.style.opacity = '0'; });
+}
 function drink() { if (game) handle(game.drink([])); }
 function save() { store.set('run', { seed: game.seed, depth: game.depth, hero: game.carry(), codex: [...game.codex] }); }
 
@@ -530,6 +535,7 @@ function toggleMap() {
   if (!game || state !== 'play') return;
   mapMode = !mapMode;
   game.mapMode = mapMode;
+  $('game').classList.toggle('mapping', mapMode);
   $('btn-map').querySelector('.long').textContent = mapMode ? 'назад' : 'карта';
   $('btn-map').querySelector('.short').textContent = mapMode ? '✕' : '▦';
   if (mapMode) {
@@ -567,6 +573,13 @@ function loop(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   t += dt;
+  quality.acc += dt; quality.n++;
+  if (quality.acc > 2.5) {
+    const avg = quality.acc / quality.n;
+    const next = avg > 1 / 40 ? Math.max(1, quality.pr - 0.25) : avg < 1 / 57 ? Math.min(quality.max, quality.pr + 0.25) : quality.pr;
+    if (next !== quality.pr && !params.has('fixed')) { quality.pr = next; renderer.setPixelRatio(next); resize(); }
+    quality.acc = 0; quality.n = 0;
+  }
   if (game) {
     if (state === 'play' && !mapMode) {
       acc += dt;

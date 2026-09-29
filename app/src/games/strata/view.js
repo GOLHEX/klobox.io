@@ -297,7 +297,7 @@ export class View {
         this.bakeProps(loc.props.filter((p) => !['campfire'].includes(p.kind)));
         // the god's sword
         const sword = MODELS.buildGodsword(loc.landmark);
-        this.bakeInto(this.root, [sword]);
+        this.bakeInto(this.root, [sword, ...w.ladders.map((l) => MODELS.buildLadder(l))]);
         this.buildDynamic(game);
         this.caps = null;
         this.clip = { level: 999, target: 999, timer: 0, step: 0 };

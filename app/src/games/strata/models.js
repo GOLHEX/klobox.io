@@ -660,6 +660,19 @@ export function buildGodsword(lm) {
     return g;
 }
 
+// a ladder up the wall on the -x or -y side of its column, poking over the top
+export function buildLadder(l) {
+    const k = new Kit(l.x * 31 + l.y);
+    const g = k.g;
+    const [wx, wy] = l.wall;
+    g.position.set(l.x + 0.5 + wx * 0.4, l.y + 0.5 + wy * 0.4, 0);
+    g.rotation.z = wx !== 0 ? 0 : Math.PI / 2;
+    const h = l.top - l.bottom + 0.9;
+    for (const s of [-0.28, 0.28]) k.box(0.07, 0.07, h, C.wood, 0, s, l.bottom + h / 2);
+    for (let z = l.bottom + 0.3; z < l.top + 0.8; z += 0.36) k.box(0.05, 0.56, 0.05, C.light, 0.02, 0, z);
+    return g;
+}
+
 // ---------------------------------------------------------------- dynamic things
 export function buildChest(c) {
     const k = new Kit(c.id);

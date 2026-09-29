@@ -705,7 +705,7 @@ function buildWalls(G, a) {
     const span = Math.max(1, a.x1 - a.x0 + (a.y1 - a.y0));
     const taper = (x, y) => {
         const f = (x - a.x0 + (y - a.y0)) / span;
-        return Math.max(1, Math.round(a.wh * (1 - Math.max(0, f - 0.15) * 1.5)));
+        return Math.max(1, Math.round(a.wh * (1 - Math.max(0, f - 0.1) * 1.8)));
     };
     let n = 0;
     for (const [x, y] of a.cells) {
@@ -728,7 +728,7 @@ function buildWalls(G, a) {
             } else if (!isDoor && !a.pools.has(k2(x, y))) w.set(x, y, h, bio.wall === B.TIMBER ? B.PLANK : bio.wall);
         } else if (a.walls === 'rock') {
             if (back) {
-                const top = h + clamp(wh + ri(rng, -1, 1), 2, 7);
+                const top = h + clamp(wh + ri(rng, -1, 1), 1, 6);
                 for (let z = h; z < top; z++) if (!(isDoor && z < h + 2)) w.set(x, y, z, z === top - 1 && rng() < 0.4 ? bio.under2 === B.CRYSTAL ? B.CRYSTAL : bio.rim : a.biome === 'mine' && rng() < 0.12 ? B.ORE : bio.wall);
             } else if (!isDoor && rng() < 0.4) w.set(x, y, h, bio.rim);
         } else if (a.walls === 'ruin') {

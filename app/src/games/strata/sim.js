@@ -193,6 +193,20 @@ export class Game {
         h.cd = HERO.cd;
         h.swing = 0.22;
         events.push({ type: 'swing' });
+        // a little help aiming: turn toward the nearest foe within reach
+        let aim = null;
+        let ad = HERO.reach + 0.7;
+        for (const c of this.creatures) {
+            if (c.hp <= 0 || c.z - b.z < -1.2 || c.z - b.z > 1.6) continue;
+            const d = Math.hypot(c.x - b.x, c.y - b.y) - (this.hostile(c) ? 0.6 : 0);
+            if (d < ad) { ad = d; aim = c; }
+        }
+        if (aim) {
+            const dx = aim.x - b.x;
+            const dy = aim.y - b.y;
+            const d = Math.hypot(dx, dy);
+            if (d > 0.05) b.facing = [dx / d, dy / d];
+        }
         const [fx, fy] = b.facing;
         let hit = false;
         for (const c of this.creatures) {
