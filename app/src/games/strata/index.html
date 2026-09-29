@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Ярусы</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: the whole screen is the cutaway world; comic tags for the HUD at the
+   top, a stick and four round buttons for thumbs at the bottom, cream cards for
+   anything to read. One look on purpose: ink on paper, whatever the time of day
+   inside the game. */
+:root {
+  --paper: #f4ecd8;
+  --ink: #1c1828;
+  --tag: #1c1828;
+  --tag-ink: #fbf5e6;
+  --mustard: #e6b73c;
+  --red: #d8503f;
+  --teal: #5fd6c8;
+  --muted: #6d6578;
+  --font: 'Rubik', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+[hidden] { display: none !important; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #0e0c16; color: var(--ink); font-family: var(--font); -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+.game { position: fixed; inset: 0; overflow: hidden; touch-action: none; }
+canvas#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.tag { display: inline-flex; align-items: center; gap: 6px; background: var(--tag); color: var(--tag-ink); font: 700 12px/1 var(--mono); padding: 6px 8px; border-radius: 2px; white-space: nowrap; }
+.hud { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 10px; right: 196px; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; align-items: flex-start; }
+@media (max-width: 640px) {
+  .hud { right: 124px; gap: 4px; }
+  .hud .tag { font-size: 11px; padding: 5px 6px; }
+  .corner .btn { padding: 8px 9px; font-size: 12px; }
+  .corner .long { display: none; }
+  #clock .word { display: none; }
+}
+@media (min-width: 641px) { .corner .short { display: none; } }
+.hud .grow { flex: 1; }
+.hearts i { display: inline-block; width: 11px; height: 11px; margin-right: 2px; background: var(--red); clip-path: path('M5.5 10 L1 5.5 A2.6 2.6 0 0 1 5.5 2 A2.6 2.6 0 0 1 10 5.5 Z'); }
+.hearts i.empty { background: #4a4458; }
+.seals i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid #5a5468; margin-left: 2px; }
+.seals i.on { background: var(--teal); border-color: var(--teal); box-shadow: 0 0 8px var(--teal); }
+.corner { position: absolute; top: max(10px, env(safe-area-inset-top)); right: 10px; display: flex; gap: 6px; }
+.btn { font: 700 13px/1 var(--mono); background: var(--tag); color: var(--tag-ink); border: 0; padding: 9px 11px; border-radius: 2px; cursor: pointer; box-shadow: 3px 3px 0 rgba(0,0,0,0.35); }
+.btn:hover { background: #2d2840; }
+.btn:focus-visible { outline: 3px solid var(--mustard); outline-offset: 2px; }
+.btn.light { background: var(--paper); color: var(--ink); box-shadow: 3px 3px 0 var(--ink); }
+.btn.gold { background: var(--mustard); color: var(--ink); box-shadow: 3px 3px 0 var(--ink); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.marker { position: absolute; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; }
+.marker .tag { font-size: 11px; padding: 4px 6px; }
+.marker::after { content: ""; width: 2px; height: 12px; background: var(--tag); }
+.marker.seal .tag { background: #1f5f5a; }
+.marker.gate .tag { background: #4a3a8a; }
+.prompt { position: absolute; transform: translate(-50%, -100%); }
+.prompt .tag { background: var(--mustard); color: var(--ink); font-size: 12px; box-shadow: 2px 2px 0 var(--ink); }
+.pop { position: absolute; transform: translate(-50%, -50%); font: 800 16px/1 var(--font); color: #fff; -webkit-text-stroke: 3px var(--ink); paint-order: stroke; transition: transform 0.9s ease-out, opacity 0.9s ease-in; }
+.log { position: absolute; left: 50%; transform: translateX(-50%); bottom: 150px; display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; }
+.tier-card { position: absolute; left: 50%; top: 22%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; transition: opacity 0.8s; }
+.tier-card .n { font: 700 13px/1 var(--mono); color: var(--tag-ink); background: var(--tag); padding: 5px 8px; display: inline-block; }
+.tier-card h2 { margin: 8px 0 0; font: 800 clamp(26px, 6vw, 44px)/1.05 var(--font); color: #fff; -webkit-text-stroke: 6px var(--ink); paint-order: stroke; }
+/* touch controls */
+.stick { position: absolute; left: 0; bottom: 0; width: 50%; height: 58%; }
+.stick .base { position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 3px solid rgba(251,245,230,0.5); background: rgba(28,24,40,0.25); display: none; }
+.stick .knob { position: absolute; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; background: rgba(251,245,230,0.85); border: 3px solid var(--ink); display: none; }
+.pad { position: absolute; right: max(12px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); width: 190px; height: 190px; }
+.pad button { position: absolute; width: 68px; height: 68px; border-radius: 50%; border: 3px solid var(--ink); background: var(--paper); color: var(--ink); font: 800 12px/1.05 var(--mono); box-shadow: 3px 3px 0 var(--ink); display: flex; align-items: center; justify-content: center; text-align: center; padding: 4px; touch-action: none; }
+.pad button:active, .pad button.held { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+.pad .attack { right: 0; bottom: 38px; width: 84px; height: 84px; background: var(--red); color: #fff; font-size: 13px; }
+.pad .jump { right: 92px; bottom: 0; }
+.pad .dash { right: 100px; bottom: 82px; }
+.pad .use { right: 14px; bottom: 132px; background: var(--mustard); }
+.pad .use:disabled { opacity: 0.4; }
+.drinks { position: absolute; left: max(12px, env(safe-area-inset-left)); bottom: max(14px, env(safe-area-inset-bottom)); display: flex; gap: 6px; }
+.touch-only { display: none; }
+@media (hover: none), (pointer: coarse) { .touch-only { display: block; } .desk-only { display: none !important; } }
+/* cards */
+.overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(14,12,22,0.55); padding: 16px; z-index: 5; }
+.card { background: var(--paper); border: 3px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); max-width: 560px; width: 100%; padding: 22px 22px 18px; max-height: calc(100vh - 32px); overflow: auto; }
+.card h1 { margin: 0 0 10px; font: 800 clamp(30px, 7vw, 46px)/1 var(--font); letter-spacing: -0.5px; }
+.card h1 span { background: var(--ink); color: var(--mustard); padding: 0 8px; }
+.card h3 { margin: 0 0 6px; font: 800 22px/1.1 var(--font); }
+.card p { margin: 0 0 10px; font: 500 15px/1.45 var(--font); }
+.card .small { font: 500 12.5px/1.5 var(--mono); color: var(--muted); }
+.card ul { margin: 0 0 12px; padding-left: 18px; font: 500 14px/1.5 var(--font); }
+.card .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.keys { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font: 500 12.5px/1.4 var(--mono); margin: 6px 0 10px; }
+.keys b { background: var(--ink); color: var(--tag-ink); padding: 2px 6px; text-align: center; }
+.codex { display: grid; gap: 8px; margin-top: 8px; }
+.codex div { border-left: 4px solid var(--mustard); padding: 4px 10px; background: rgba(28,24,40,0.05); }
+.codex div.unknown { border-color: #b8b0c0; color: var(--muted); }
+.codex b { display: block; font: 800 15px/1.3 var(--font); }
+.codex i { font: 500 13px/1.45 var(--font); font-style: normal; }
+.codex .biome { font: 700 11px/1 var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 6px; }
+.shop { display: grid; gap: 8px; margin: 8px 0; }
+.shop button { display: flex; justify-content: space-between; align-items: center; width: 100%; text-align: left; }
+.relic-card { position: absolute; left: 50%; bottom: 170px; transform: translateX(-50%); max-width: min(460px, calc(100vw - 24px)); background: var(--paper); border: 3px solid var(--ink); box-shadow: 6px 6px 0 var(--ink); padding: 12px 14px; z-index: 4; }
+.relic-card .kind { font: 700 11px/1 var(--mono); color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+.relic-card b { display: block; font: 800 18px/1.2 var(--font); margin: 4px 0; }
+.relic-card p { margin: 0; font: 500 14px/1.45 var(--font); }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; background: #0e0c16; color: var(--tag-ink); font: 700 14px/1 var(--mono); z-index: 9; }
+</style>
+</head>
+<body>
+<div class="game" id="game">
+  <canvas id="view" aria-label="Мир-разрез в изометрии: ярусы один под другим"></canvas>
+  <div class="labels" id="labels"></div>
+  <div class="hud" id="hud">
+    <span class="tag" id="depth">Разрез 1 · ярус 1</span>
+    <span class="tag"><span class="hearts" id="hearts"></span></span>
+    <span class="tag">печати <span class="seals" id="seals"><i></i><i></i><i></i></span></span>
+    <span class="tag" id="purse">монеты 0 · ключи 0</span>
+    <span class="tag" id="clock">утро</span>
+  </div>
+  <div class="corner">
+    <button class="btn" id="btn-map" type="button" title="Карта (M)" aria-label="Карта"><span class="long">карта</span><span class="short">▦</span></button>
+    <button class="btn" id="btn-codex" type="button" title="Кодекс (C)" aria-label="Кодекс"><span class="long">кодекс</span><span class="short">✎</span></button>
+    <button class="btn" id="btn-menu" type="button" title="Пауза (Esc)" aria-label="Пауза">II</button>
+  </div>
+  <div class="log" id="log"></div>
+  <div class="tier-card" id="tier-card" hidden><span class="n" id="tier-n"></span><h2 id="tier-name"></h2></div>
+  <div class="relic-card" id="relic-card" hidden><span class="kind" id="relic-kind">реликвия</span><b id="relic-name"></b><p id="relic-text"></p></div>
+
+  <div class="stick touch-only" id="stick"><div class="base" id="stick-base"></div><div class="knob" id="stick-knob"></div></div>
+  <div class="pad touch-only" id="pad">
+    <button class="attack" data-act="attack" type="button">УДАР</button>
+    <button class="jump" data-act="jump" type="button">ПРЫЖОК</button>
+    <button class="dash" data-act="dash" type="button">РЫВОК</button>
+    <button class="use" data-act="interact" type="button" id="use" disabled>ВЗЯТЬ</button>
+  </div>
+  <div class="drinks"><button class="btn light" id="potion" type="button">зелье ×1</button><button class="btn light" id="zoom" type="button" aria-label="Масштаб">⊕</button></div>
+
+  <div class="overlay" id="title">
+    <div class="card">
+      <h1>Я<span>русы</span></h1>
+      <p>Бог-кузнец рассёк мир мечом, и пласты разошлись, как слои пирога. Теперь они висят над бездной один под другим: деревня на краю, штольни, затопленные гроты, катакомбы, кузни, архивы. На дне каждого Разреза стоят Врата. Им нужны три Печати.</p>
+      <ul>
+        <li>Спускайся ярус за ярусом: лестницы, мосты, стремянки, водопады в глубокие омуты.</li>
+        <li>Печати — в запертом сундуке (ключ где-то рядом), у вожака яруса и в хранилище за решёткой, которую поднимают рычаги.</li>
+        <li>Костры лечат и запоминают место. Торговец берёт монеты. Реликвии пополняют кодекс — у каждой своя история.</li>
+        <li>Днём волки робеют, ночью звереют. Слизни и крабы бьют только в ответ.</li>
+      </ul>
+      <div class="keys desk-only"><b>WASD</b><span>идти (стрелки тоже)</span><b>Пробел</b><span>прыжок · на уступ в блок высотой можно и просто шагнуть</span><b>J / клик</b><span>удар мечом</span><b>Shift</b><span>рывок, на миг неуязвим</span><b>E</b><span>взять, открыть, дёрнуть, отдохнуть</span><b>Q</b><span>зелье</span><b>M · C</b><span>карта · кодекс</span></div>
+      <p class="small touch-only">Левая половина экрана — стик. Справа: удар, прыжок, рывок, «взять».</p>
+      <div class="row"><button class="btn gold" id="start" type="button">Начать спуск</button><button class="btn light" id="continue" type="button" hidden>Продолжить</button></div>
+    </div>
+  </div>
+  <div class="overlay" id="modal" hidden><div class="card" id="modal-card"></div></div>
+  <div class="loading" id="loading">Раскалываю мир…</div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { Game, DAY, SEALS } from './sim.js';
+import { View } from './view.js';
+import { RELICS, BIOMES, SHOP, KINDS } from './lore.js';
+
+const $ = (id) => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('strata.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('strata.' + k, JSON.stringify(v)); } catch { /* private mode */ } },
+};
+
+const canvas = $('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+const view = new View(renderer);
+let game = null;
+let state = 'title';
+
+function resize() { view.resize(innerWidth, innerHeight); }
+addEventListener('resize', resize);
+resize();
+
+// ---------------------------------------------------------------- starting and moving on
+function begin(g) {
+  game = g;
+  view.setGame(g);
+  hudKey = '';
+  store.set('run', { seed: g.seed, depth: g.depth, hero: g.carry(), codex: [...g.codex] });
+  store.set('codex', [...g.codex]);
+  tierCard(0, g.loc.tiers[0].name);
+}
+function newRun() {
+  const seed = Number(params.get('seed')) || ((Math.random() * 1e9) | 0);
+  begin(new Game({ seed, depth: 1, codex: store.get('codex', []) }));
+}
+
+// ---------------------------------------------------------------- input
+const keys = new Set();
+const edge = { jump: false, attack: false, dash: false, interact: false };
+const stick = { x: 0, y: 0, id: null, ox: 0, oy: 0 };
+addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  const k = e.key.toLowerCase();
+  keys.add(k);
+  if (state === 'play') {
+    if (k === ' ') { edge.jump = true; e.preventDefault(); }
+    if (k === 'j' || k === 'k') edge.attack = true;
+    if (k === 'shift') edge.dash = true;
+    if (k === 'e' || k === 'enter') edge.interact = true;
+    if (k === 'q') drink();
+    if (k === 'm') toggleMap();
+    if (k === 'c') openCodex();
+  }
+  if (k === 'escape') { if (!$('modal').hidden) closeModal(); else if (state === 'play') openMenu(); }
+});
+addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+addEventListener('blur', () => keys.clear());
+canvas.addEventListener('mousedown', (e) => { if (state === 'play' && e.button === 0 && !matchMedia('(pointer: coarse)').matches) edge.attack = true; });
+canvas.addEventListener('wheel', (e) => { e.preventDefault(); view.view.zoom = THREE.MathUtils.clamp(view.view.zoom * Math.exp(-e.deltaY * 0.0015), 0.3, 2.4); }, { passive: false });
+
+const stickEl = $('stick');
+stickEl.addEventListener('pointerdown', (e) => {
+  if (stick.id !== null) return;
+  stick.id = e.pointerId;
+  stickEl.setPointerCapture(e.pointerId);
+  stick.ox = e.clientX; stick.oy = e.clientY;
+  for (const el of [$('stick-base'), $('stick-knob')]) { el.style.display = 'block'; el.style.left = e.clientX + 'px'; el.style.top = (e.clientY - stickEl.getBoundingClientRect().top) + 'px'; }
+  sound.start();
+});
+stickEl.addEventListener('pointermove', (e) => {
+  if (e.pointerId !== stick.id) return;
+  let dx = e.clientX - stick.ox; let dy = e.clientY - stick.oy;
+  const d = Math.hypot(dx, dy); const R = 52;
+  if (d > R) { dx = dx / d * R; dy = dy / d * R; }
+  stick.x = dx / R; stick.y = -dy / R;
+  const top = stickEl.getBoundingClientRect().top;
+  $('stick-knob').style.left = (stick.ox + dx) + 'px'; $('stick-knob').style.top = (stick.oy + dy - top) + 'px';
+});
+const stickEnd = (e) => { if (e.pointerId !== stick.id) return; stick.id = null; stick.x = stick.y = 0; $('stick-base').style.display = 'none'; $('stick-knob').style.display = 'none'; };
+stickEl.addEventListener('pointerup', stickEnd);
+stickEl.addEventListener('pointercancel', stickEnd);
+for (const b of document.querySelectorAll('#pad button')) {
+  b.addEventListener('pointerdown', (e) => { e.preventDefault(); sound.start(); edge[b.dataset.act] = true; b.classList.add('held'); });
+  const up = () => b.classList.remove('held');
+  b.addEventListener('pointerup', up); b.addEventListener('pointerleave', up); b.addEventListener('pointercancel', up);
+}
+$('potion').addEventListener('click', drink);
+$('zoom').addEventListener('click', () => { const z = [0.7, 1, 1.45]; const i = z.findIndex((v) => Math.abs(v - view.view.zoom) < 0.05); view.view.zoom = z[(i + 1) % z.length]; });
+$('btn-map').addEventListener('click', toggleMap);
+$('btn-codex').addEventListener('click', openCodex);
+$('btn-menu').addEventListener('click', openMenu);
+
+// screen directions to the world: up the screen is -x -y, right is -x +y
+function moveInput() {
+  let sx = stick.x; let sy = stick.y;
+  if (keys.has('a') || keys.has('arrowleft')) sx -= 1;
+  if (keys.has('d') || keys.has('arrowright')) sx += 1;
+  if (keys.has('w') || keys.has('arrowup')) sy += 1;
+  if (keys.has('s') || keys.has('arrowdown')) sy -= 1;
+  const l = Math.hypot(sx, sy);
+  if (l > 1) { sx /= l; sy /= l; }
+  const k = Math.SQRT1_2;
+  return { mx: (-sx - sy) * k, my: (sx - sy) * k };
+}
+
+// ---------------------------------------------------------------- sound
+const sound = {
+  ctx: null, amb: null,
+  start() {
+    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ctx = new AC();
+    this.out = this.ctx.createGain(); this.out.gain.value = 0.45; this.out.connect(this.ctx.destination);
+    // a low drone that follows the tier, and filtered noise for air and water
+    const o = this.ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = 55;
+    const og = this.ctx.createGain(); og.gain.value = 0.035;
+    o.connect(og).connect(this.out); o.start();
+    const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * 2, this.ctx.sampleRate);
+    const d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const n = this.ctx.createBufferSource(); n.buffer = buf; n.loop = true;
+    const f = this.ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 500;
+    const ng = this.ctx.createGain(); ng.gain.value = 0.02;
+    n.connect(f).connect(ng).connect(this.out); n.start();
+    this.amb = { o, og, f, ng };
+  },
+  tone(freq, dur = 0.15, type = 'square', gain = 0.07, to = null, delay = 0) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime + delay;
+    const o = this.ctx.createOscillator(); const g = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+    g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(this.out); o.start(t); o.stop(t + dur + 0.02);
+  },
+  noise(dur = 0.1, freq = 1200, gain = 0.08) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const buf = this.ctx.createBuffer(1, Math.ceil(this.ctx.sampleRate * dur), this.ctx.sampleRate);
+    const d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const s = this.ctx.createBufferSource(); s.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq;
+    const g = this.ctx.createGain(); g.gain.value = gain;
+    s.connect(f).connect(g).connect(this.out); s.start(t);
+  },
+  mood(biome, night) {
+    if (!this.amb) return;
+    const base = { village: 65, ruins: 58, mine: 49, grotto: 44, fungal: 52, crystal: 73, crypt: 41, forge: 46, library: 55, roots: 50, sanctum: 37 }[biome] ?? 50;
+    const t = this.ctx.currentTime;
+    this.amb.o.frequency.setTargetAtTime(base * (night ? 0.94 : 1), t, 1.5);
+    this.amb.f.frequency.setTargetAtTime(biome === 'grotto' ? 900 : biome === 'forge' ? 300 : 500, t, 1.5);
+  },
+};
+
+// ---------------------------------------------------------------- HUD and messages
+let hudKey = '';
+function hud() {
+  const h = game.hero;
+  const tier = game.loc.tiers[game.tier];
+  const p = game.dayPhase;
+  const time = p < 0.22 || p > 0.8 ? 'ночь' : p < 0.32 ? 'рассвет' : p < 0.68 ? 'день' : 'закат';
+  const key = [h.hp, h.maxHp, h.seals, h.coins, h.keys, h.potions, h.dmg, game.tier, time, game.depth].join();
+  if (key === hudKey) return;
+  hudKey = key;
+  $('depth').textContent = `Разрез ${game.depth} · ярус ${game.tier + 1}/${game.loc.tiers.length}`;
+  $('hearts').innerHTML = Array.from({ length: h.maxHp }, (_, i) => `<i class="${i < h.hp ? '' : 'empty'}"></i>`).join('');
+  [...$('seals').children].forEach((el, i) => el.classList.toggle('on', i < h.seals));
+  $('purse').textContent = `монеты ${h.coins} · ключи ${h.keys} · меч ${h.dmg}`;
+  $('clock').innerHTML = `${time === 'ночь' ? '☾' : '☀'} <span class="word">${time}</span>`;
+  $('potion').textContent = `зелье ×${h.potions}`;
+  $('potion').disabled = h.potions === 0 || h.hp >= h.maxHp;
+  sound.mood(tier.biome, game.night);
+}
+function log(text) {
+  const el = document.createElement('span');
+  el.className = 'tag';
+  el.textContent = text;
+  const box = $('log');
+  box.append(el);
+  while (box.children.length > 3) box.firstChild.remove();
+  setTimeout(() => el.remove(), 4500);
+}
+function pop(text, x, y, z, color = '#fff') {
+  const [sx, sy] = view.toScreen(x, y, z);
+  const el = document.createElement('div');
+  el.className = 'pop';
+  el.textContent = text;
+  el.style.color = color;
+  el.style.left = sx + 'px'; el.style.top = sy + 'px';
+  $('labels').append(el);
+  requestAnimationFrame(() => { el.style.transform = 'translate(-50%, -220%)'; el.style.opacity = '0'; });
+  setTimeout(() => el.remove(), 950);
+}
+let tierTimer = null;
+function tierCard(i, name) {
+  $('tier-n').textContent = `ЯРУС ${i + 1}`;
+  $('tier-name').textContent = name;
+  const c = $('tier-card');
+  c.hidden = false; c.style.opacity = '1';
+  clearTimeout(tierTimer);
+  tierTimer = setTimeout(() => { c.style.opacity = '0'; tierTimer = setTimeout(() => (c.hidden = true), 800); }, 2200);
+}
+let relicTimer = null;
+function card(kind, name, text) {
+  $('relic-kind').textContent = kind; $('relic-name').textContent = name; $('relic-text').textContent = text;
+  $('relic-card').hidden = false;
+  clearTimeout(relicTimer);
+  relicTimer = setTimeout(() => ($('relic-card').hidden = true), 7000);
+}
+$('relic-card').addEventListener('click', () => ($('relic-card').hidden = true));
+
+// markers over things worth finding, and the prompt over what can be used now
+const PROMPT = { chest: 'открыть сундук', lever: 'дёрнуть рычаг', pedestal: 'взять', campfire: 'отдохнуть у костра', sign: 'прочесть', merchant: 'торговать', gate: 'Врата' };
+let markers = [];
+let promptEl = null;
+function markerList() {
+  const out = [];
+  const g = game;
+  for (const c of g.chests) if (!c.opened && c.loot.includes('seal')) out.push({ at: [c.x + 0.5, c.y + 0.5, c.z + 1.1], text: 'Печать · сундук', cls: 'seal' });
+  for (const p of g.pedestals) if (!p.taken) out.push({ at: [p.x + 0.5, p.y + 0.5, p.z + 1.8], text: p.seal ? 'Печать' : 'реликвия', cls: p.seal ? 'seal' : '' });
+  for (const c of g.creatures) if (c.hp > 0 && c.elite) out.push({ at: () => [c.x, c.y, c.z + 1.8 * c.scale], text: c.name, cls: c.carry.includes('seal') ? 'seal' : '' });
+  for (const c of g.campfires) out.push({ at: [c.x + 0.5, c.y + 0.5, c.z + 1.4], text: c.lit ? 'костёр' : 'костёр · отдых', cls: '' });
+  if (g.merchant) out.push({ at: [g.merchant.x + 0.5, g.merchant.y + 0.5, g.merchant.z + 1.8], text: 'торговец', cls: '' });
+  for (const l of g.levers) if (!l.on) out.push({ at: [l.x + 0.5, l.y + 0.5, l.z + 1.2], text: 'рычаг', cls: '' });
+  out.push({ at: [g.loc.gate.x + 0.5, g.loc.gate.y + 0.5, g.loc.gate.z + 3.4], text: 'Врата', cls: 'gate' });
+  for (const it of g.items) if (!it.taken && it.kind === 'key') out.push({ at: [it.x + 0.5, it.y + 0.5, it.h + 1], text: 'ключ', cls: '' });
+  return out;
+}
+function updateMarkers() {
+  const box = $('labels');
+  for (const m of markers) m.el.remove();
+  markers = [];
+  promptEl?.remove();
+  if (state !== 'play') return;
+  const b = game.body;
+  const clip = view.U.uClipZ.value;
+  const far = mapMode ? 200 : 15;
+  for (const m of markerList()) {
+    const at = typeof m.at === 'function' ? m.at() : m.at;
+    if (Math.hypot(at[0] - b.x, at[1] - b.y) > far || at[2] - 1.5 > clip) continue;
+    if (!mapMode && Math.abs(at[2] - b.z) > 9) continue;
+    const [x, y] = view.toScreen(...at);
+    if (x < -60 || y < -30 || x > innerWidth + 60 || y > innerHeight + 30) continue;
+    const el = document.createElement('div');
+    el.className = `marker ${m.cls}`;
+    el.innerHTML = `<span class="tag"></span>`;
+    el.firstChild.textContent = m.text;
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+    box.append(el);
+    markers.push({ el });
+  }
+  if (mapMode) {
+    const [x, y] = view.toScreen(b.x, b.y, b.z + 1.6);
+    const el = document.createElement('div');
+    el.className = 'marker';
+    el.innerHTML = '<span class="tag" style="background:#d8503f">ты</span>';
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+    box.append(el);
+    markers.push({ el });
+  }
+  // the use prompt
+  const t = game.nearest();
+  $('use').disabled = !t;
+  $('use').textContent = t ? (t.kind === 'pedestal' ? 'ВЗЯТЬ' : t.kind === 'chest' ? 'ОТКРЫТЬ' : t.kind === 'lever' ? 'РЫЧАГ' : t.kind === 'campfire' ? 'ОТДЫХ' : t.kind === 'merchant' ? 'ТОРГ' : t.kind === 'sign' ? 'ЧИТАТЬ' : 'ВРАТА') : 'ВЗЯТЬ';
+  if (t && !mapMode) {
+    if (!promptEl) { promptEl = document.createElement('div'); promptEl.className = 'prompt'; promptEl.innerHTML = '<span class="tag"></span>'; }
+    const [x, y] = view.toScreen(t.x + 0.5, t.y + 0.5, t.z + (t.kind === 'gate' ? 3.4 : 1.5));
+    const touch = matchMedia('(pointer: coarse)').matches;
+    promptEl.firstChild.textContent = `${touch ? '' : 'E · '}${PROMPT[t.kind]}${t.kind === 'chest' && t.ref.locked ? ' (заперт)' : ''}`;
+    promptEl.style.left = x + 'px'; promptEl.style.top = (y - 22) + 'px';
+    box.append(promptEl);
+  }
+}
+
+// ---------------------------------------------------------------- events from the simulation
+function handle(events) {
+  const b = game.body;
+  for (const e of events) {
+    switch (e.type) {
+      case 'swing': sound.noise(0.08, 2400, 0.05); view.slash(); break;
+      case 'impact': sound.tone(150, 0.08, 'square', 0.05, 80); break;
+      case 'hit': { const c = game.creatures.find((x) => x.id === e.id); if (c) { pop(`-${e.dmg}`, c.x, c.y, c.z + 1.2); view.particles.burst('spark', c.x, c.y, c.z + 0.5, 9, 3); view.shake(0.25); } break; }
+      case 'kill': { const c = game.creatures.find((x) => x.id === e.id); if (c) view.particles.burst('poof', c.x, c.y, c.z + 0.4, 12, 1.6, 0.6); log(e.elite ? `Повержен: ${e.name}` : `Побеждён: ${KINDS[e.kind]?.name ?? e.kind}`); sound.tone(280, 0.3, 'sawtooth', 0.05, 70); break; }
+      case 'hurt': pop(`-${e.dmg}`, b.x, b.y, b.z + 1.6, '#ff8a7a'); sound.tone(110, 0.2, 'sawtooth', 0.08, 55); view.shake(0.6); break;
+      case 'windup': break;
+      case 'spit': sound.noise(0.2, 400, 0.05); break;
+      case 'jump': case 'hop': sound.tone(300, 0.08, 'triangle', 0.03, 480); break;
+      case 'land': sound.noise(0.06, 300, 0.05); view.particles.burst('puff', b.x, b.y, b.z + 0.05, 6, 1.4, 0.2); break;
+      case 'fall': log(`Больно падать: -${e.dmg}`); break;
+      case 'rescued': log('Бездна вернула тебя на край'); break;
+      case 'dash': sound.noise(0.12, 900, 0.05); break;
+      case 'splash': view.particles.burst('splash', b.x, b.y, b.z + 0.9, 18, 2.6, 1.6); sound.noise(0.35, 800, 0.1); break;
+      case 'break': view.rebakeProp(e.prop); view.particles.burst('puff', e.prop.x + 0.5, e.prop.y + 0.5, e.prop.z + 0.4, 10, 2, 0.8); sound.noise(0.15, 700, 0.08); break;
+      case 'drop': break;
+      case 'pickup': {
+        view.particles.burst('sparkle', b.x, b.y, b.z + 0.8, e.kind === 'seal' ? 24 : 6, 1.5, 1.2);
+        const names = { coin: '+1', gem: '+5', potion: '+ зелье', food: '+ сердце', key: '+ ключ', seal: 'ПЕЧАТЬ', heart: '+ сердце к запасу', sword: 'клинок острее' };
+        pop(names[e.kind] ?? '+', b.x, b.y, b.z + 1.8, e.kind === 'seal' ? '#7ff0e2' : e.kind === 'coin' || e.kind === 'gem' ? '#ffd35a' : '#fff');
+        if (e.kind === 'seal') { log(`Печать Разреза ${game.hero.seals}/${SEALS}`); [523, 659, 784, 1046].forEach((f, i) => sound.tone(f, 0.25, 'sine', 0.08, null, i * 0.09)); }
+        else if (e.kind === 'key') { log('Ключ: откроет любой запертый сундук'); sound.tone(880, 0.15, 'sine', 0.06); }
+        else if (e.kind === 'heart' || e.kind === 'sword') { log(e.kind === 'heart' ? 'Запас сердец вырос' : 'Меч бьёт сильнее'); sound.tone(660, 0.3, 'triangle', 0.07, 990); }
+        else sound.tone(e.kind === 'coin' ? 1320 : 990, 0.08, 'sine', 0.04);
+        break;
+      }
+      case 'open': sound.tone(440, 0.25, 'triangle', 0.07, 880); break;
+      case 'locked': log('Заперто. Нужен ключ'); sound.tone(120, 0.15, 'square', 0.06); break;
+      case 'lever': sound.noise(0.2, 500, 0.08); break;
+      case 'lever-wait': log(`Где-то скрипнула решётка. Рычагов осталось: ${e.left}`); break;
+      case 'gate-open': log('Решётка хранилища поднялась!'); sound.tone(220, 0.6, 'sawtooth', 0.05, 440); break;
+      case 'relic': card(e.fresh ? 'новая реликвия · в кодекс' : 'реликвия', e.name, e.text); [784, 988, 1175].forEach((f, i) => sound.tone(f, 0.3, 'sine', 0.06, null, i * 0.12)); store.set('codex', [...game.codex]); break;
+      case 'rest': card('костёр', 'Передышка', `${e.note} Сердца восстановлены, здесь ты очнёшься, если падёшь.`); sound.tone(330, 0.5, 'sine', 0.05, 392); save(); break;
+      case 'read': card('табличка', 'Надпись', e.text); break;
+      case 'shop': openShop(); break;
+      case 'gate-locked': log(`Врата молчат: печатей ${e.have}/${SEALS}`); sound.tone(90, 0.4, 'sine', 0.08); break;
+      case 'descend': finishLocation(); break;
+      case 'dead': card('поражение', 'Пал в бою', `Тебя одолел(а): ${KINDS[e.by]?.name?.toLowerCase() ?? (e.by === 'lava' ? 'лава' : e.by === 'fall' ? 'высота' : e.by)}. Очнулся у последнего костра, потеряно монет: ${e.lost}.`); sound.tone(200, 0.8, 'sawtooth', 0.07, 50); break;
+      case 'tier': tierCard(e.tier, e.name); break;
+      case 'drink': log('Зелье: +3 сердца'); sound.tone(520, 0.3, 'sine', 0.06, 1040); break;
+      case 'bought': log('Куплено'); sound.tone(1200, 0.1, 'sine', 0.05); openShop(); break;
+      case 'poor': log('Не хватает монет'); break;
+      case 'full': log('Зелий и так полная сумка'); break;
+      default:
+    }
+  }
+  hud();
+}
+function drink() { if (game) handle(game.drink([])); }
+function save() { store.set('run', { seed: game.seed, depth: game.depth, hero: game.carry(), codex: [...game.codex] }); }
+
+// ---------------------------------------------------------------- modals
+function openModal(html) { $('modal-card').innerHTML = html; $('modal').hidden = false; if (state === 'play') state = 'pause'; }
+function closeModal() { $('modal').hidden = true; if (state === 'pause') state = 'play'; }
+$('modal').addEventListener('click', (e) => { if (e.target.id === 'modal' || e.target.dataset.close !== undefined) closeModal(); });
+function openShop() {
+  const h = game.hero;
+  openModal(`<h3>Торговец</h3><p class="small">Монеты: ${h.coins}. Самоцвет стоит пять монет.</p><div class="shop">${SHOP.map((o, i) => `<button class="btn light" data-buy="${i}" ${h.coins < o.price ? 'disabled' : ''}><span>${o.name}</span><span>${o.price}</span></button>`).join('')}</div><div class="row"><button class="btn" data-close>Уйти</button></div>`);
+  for (const b of document.querySelectorAll('[data-buy]')) b.addEventListener('click', () => handle(game.buy(Number(b.dataset.buy), [])));
+}
+function openCodex() {
+  const found = game ? game.codex : new Set(store.get('codex', []));
+  const groups = {};
+  for (const [id, r] of Object.entries(RELICS)) (groups[r.biome] ??= []).push([id, r]);
+  const total = Object.keys(RELICS).length;
+  let html = `<h3>Кодекс реликвий</h3><p class="small">Найдено ${found.size} из ${total}. Кодекс помнит находки между спусками.</p><div class="codex">`;
+  for (const [biome, list] of Object.entries(groups)) {
+    html += `<span class="biome">${BIOMES[biome].name}</span>`;
+    for (const [id, r] of list) html += found.has(id) ? `<div><b>${r.name}</b><i>${r.text}</i></div>` : `<div class="unknown"><b>???</b><i>Ещё не найдено.</i></div>`;
+  }
+  html += `</div><div class="row"><button class="btn" data-close>Закрыть</button></div>`;
+  openModal(html);
+}
+function openMenu() {
+  openModal(`<h3>Пауза</h3><div class="keys"><b>WASD</b><span>идти</span><b>Пробел</b><span>прыжок</span><b>J / клик</b><span>удар</span><b>Shift</b><span>рывок</span><b>E</b><span>действие</span><b>Q</b><span>зелье</span><b>M</b><span>карта</span><b>C</b><span>кодекс</span></div><p class="small">Разрез ${game.depth}, семя ${game.seed}. Смертей: ${game.deaths}.</p><div class="row"><button class="btn gold" data-close>Дальше</button><button class="btn light" id="restart">Новый спуск</button></div>`);
+  $('restart').addEventListener('click', () => { closeModal(); newRun(); });
+}
+function finishLocation() {
+  state = 'end';
+  const found = game.found.size;
+  openModal(`<h3>Разрез ${game.depth} пройден</h3><p>Три Печати легли в кольцо, и Врата открылись. За ними — следующий Разрез, глубже и злее. Сердца, меч, зелья и монеты идут с тобой.</p><p class="small">Реликвий найдено здесь: ${found}. Смертей: ${game.deaths}.</p><div class="row"><button class="btn gold" id="deeper">Шагнуть во Врата</button></div>`);
+  $('deeper').addEventListener('click', () => { closeModal(); loading(() => { begin(game.next()); state = 'play'; }); });
+}
+let mapMode = false;
+let mapSave = null;
+function toggleMap() {
+  if (!game || state !== 'play') return;
+  mapMode = !mapMode;
+  game.mapMode = mapMode;
+  $('btn-map').querySelector('.long').textContent = mapMode ? 'назад' : 'карта';
+  $('btn-map').querySelector('.short').textContent = mapMode ? '✕' : '▦';
+  if (mapMode) {
+    mapSave = view.view.zoom;
+    const w = game.world;
+    view.view.target.set(w.W / 2, w.D / 2, game.loc.tiers[Math.floor(game.loc.tiers.length / 2)].z);
+    view.view.zoom = 0.3;
+  } else view.view.zoom = mapSave ?? 1;
+}
+// drag the map around
+let drag = null;
+canvas.addEventListener('pointerdown', (e) => { if (mapMode) { drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); } });
+canvas.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const s = view.view.viewH / innerHeight / view.camera.zoom;
+  const right = new THREE.Vector3().setFromMatrixColumn(view.camera.matrixWorld, 0);
+  const up = new THREE.Vector3().setFromMatrixColumn(view.camera.matrixWorld, 1);
+  view.view.target.addScaledVector(right, -(e.clientX - drag.x) * s).addScaledVector(up, (e.clientY - drag.y) * s);
+  drag = { x: e.clientX, y: e.clientY };
+});
+canvas.addEventListener('pointerup', () => (drag = null));
+
+function loading(fn) {
+  $('loading').hidden = false;
+  setTimeout(() => { fn(); $('loading').hidden = true; }, 30);
+}
+
+// ---------------------------------------------------------------- loop
+const STEP = 1 / 60;
+let acc = 0;
+let last = performance.now();
+let t = 0;
+let markerTimer = 0;
+function loop(now) {
+  const dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  t += dt;
+  if (game) {
+    if (state === 'play' && !mapMode) {
+      acc += dt;
+      let first = true;
+      while (acc >= STEP) {
+        acc -= STEP;
+        const input = { ...moveInput(), ...(first ? edge : {}) };
+        const ev = game.update(STEP, input, []);
+        first = false;
+        for (const k in edge) edge[k] = false;
+        if (ev.length) handle(ev);
+        if (state !== 'play') break;
+      }
+    } else { acc = 0; for (const k in edge) edge[k] = false; }
+    view.update(dt, game, t);
+    view.placeCamera(dt, !mapMode);
+    view.render();
+    markerTimer -= dt;
+    if (markerTimer <= 0) { markerTimer = 1 / 30; updateMarkers(); hud(); }
+  }
+  requestAnimationFrame(loop);
+}
+
+// ---------------------------------------------------------------- start
+$('start').addEventListener('click', () => { sound.start(); $('title').hidden = true; state = 'play'; view.view.zoom = 1; tierCard(0, game.loc.tiers[0].name); });
+const saved = store.get('run', null);
+if (saved && saved.depth > 1) {
+  $('continue').hidden = false;
+  $('continue').textContent = `Продолжить: Разрез ${saved.depth}`;
+  $('continue').addEventListener('click', () => { sound.start(); loading(() => { begin(new Game({ seed: saved.seed, depth: saved.depth, hero: saved.hero, codex: store.get('codex', []) })); $('title').hidden = true; state = 'play'; view.view.zoom = 1; }); });
+}
+if (params.has('debug')) window.strata = { get game() { return game; }, view, handle, THREE };
+setTimeout(() => {
+  newRun();
+  view.view.zoom = 0.55;
+  $('loading').hidden = true;
+  requestAnimationFrame(loop);
+}, 20);
+</script>
+</body>
+</html>
