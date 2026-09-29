@@ -10,37 +10,56 @@ export const M = {
     AIR: 0, WATER: 1, SAND: 2, GRASS: 3, DIRT: 4, STONE: 5, COBBLE: 6, CONCRETE: 7, WOOD: 8, PLASTER_RED: 9,
     PLASTER_TEAL: 10, PLASTER_BLUE: 11, PLASTER_CREAM: 12, ROOF_RED: 13, ROOF_TEAL: 14, BRICK: 15, ROCK: 16,
     MOSS: 17, GLOW: 18, DARKWOOD: 19, LEAVES: 20, CORAL: 21, METAL: 22, TILE: 23, SEABED: 24, PLASTER_OCHRE: 25,
+    SANDSTONE: 26, SLAB: 27, SNOW: 28, ICE: 29, MUD: 30, BASALT: 31, ASH: 32, LAVA: 33, CLAY: 34, JGRASS: 35,
+    DRYGRASS: 36, REDROCK: 37,
 };
 
-// flat painted colours, the look is carried by light, ink and hatching
-const mat = (name, color, extra = {}) => ({ name, solid: true, color, emit: 0, ...extra });
+// How each material is drawn:
+//   style  slab  separate stones: every top edge is bevelled, a groove between neighbours
+//          soft  continuous ground: only edges above a drop are bevelled
+//          wall  built walls: straight sides merged into tall faces
+//   rough  natural sides: corners wander a little from layer to layer, like stacked rock
+//   layers second colour for alternate strata on the sides
+const mat = (name, color, extra = {}) => ({ name, solid: true, color, emit: 0, style: 'soft', rough: false, ...extra });
 export const MAT = [];
 MAT[M.AIR] = { name: 'air', solid: false };
 MAT[M.WATER] = { name: 'water', solid: false, liquid: true, color: 0x3fb0a6 };
-MAT[M.SAND] = mat('sand', 0xe9d7a8);
-MAT[M.GRASS] = mat('grass', 0xa9c46e, { side: 0xb8946a });
-MAT[M.DIRT] = mat('dirt', 0xb8946a);
-MAT[M.STONE] = mat('stone', 0xe6dfcf);
-MAT[M.COBBLE] = mat('cobble', 0xd9d2c0);
-MAT[M.CONCRETE] = mat('concrete', 0xcfd6d2);
-MAT[M.WOOD] = mat('wood', 0xa97d55);
-MAT[M.PLASTER_RED] = mat('plaster', 0xc9483e);
-MAT[M.PLASTER_TEAL] = mat('plaster', 0x4f9e9e);
-MAT[M.PLASTER_BLUE] = mat('plaster', 0x3f95b8);
-MAT[M.PLASTER_CREAM] = mat('plaster', 0xeee2c8);
-MAT[M.ROOF_RED] = mat('roof', 0xd05a45);
-MAT[M.ROOF_TEAL] = mat('roof', 0x5aa6a0);
-MAT[M.BRICK] = mat('brick', 0xc07a5a);
-MAT[M.ROCK] = mat('rock', 0xa9a6a0);
-MAT[M.MOSS] = mat('moss', 0x7fa86a, { side: 0xa9a6a0 });
-MAT[M.GLOW] = mat('glow', 0x6ff5cf, { emit: 0.9 });
-MAT[M.DARKWOOD] = mat('darkwood', 0x7a5a42);
+MAT[M.SAND] = mat('sand', 0xecc98a, { side: 0xd8a56e, rough: true, layers: 0xc99260 });
+MAT[M.GRASS] = mat('grass', 0x93c060, { side: 0xa9794e, rough: true, layers: 0x9a6a44 });
+MAT[M.DIRT] = mat('dirt', 0xa9794e, { rough: true, layers: 0x9a6a44 });
+MAT[M.STONE] = mat('stone', 0xe3dccb, { style: 'slab' });
+MAT[M.COBBLE] = mat('cobble', 0xd2cbb8, { style: 'slab' });
+MAT[M.CONCRETE] = mat('concrete', 0xcfd6d2, { style: 'wall' });
+MAT[M.WOOD] = mat('wood', 0xb07f52);
+MAT[M.PLASTER_RED] = mat('plaster', 0xc9483e, { style: 'wall' });
+MAT[M.PLASTER_TEAL] = mat('plaster', 0x4f9e9e, { style: 'wall' });
+MAT[M.PLASTER_BLUE] = mat('plaster', 0x3f95b8, { style: 'wall' });
+MAT[M.PLASTER_CREAM] = mat('plaster', 0xeee2c8, { style: 'wall' });
+MAT[M.ROOF_RED] = mat('roof', 0xd05a45, { style: 'wall' });
+MAT[M.ROOF_TEAL] = mat('roof', 0x5aa6a0, { style: 'wall' });
+MAT[M.BRICK] = mat('brick', 0xc07a5a, { style: 'wall' });
+MAT[M.ROCK] = mat('rock', 0xa8a39a, { style: 'slab', rough: true, layers: 0x96918a });
+MAT[M.MOSS] = mat('moss', 0x7fa86a, { side: 0xa8a39a, rough: true, layers: 0x96918a });
+MAT[M.GLOW] = mat('glow', 0x6ff5cf, { emit: 0.9, style: 'slab' });
+MAT[M.DARKWOOD] = mat('darkwood', 0x7a5a42, { style: 'wall' });
 MAT[M.LEAVES] = mat('leaves', 0x6f9a4a);
-MAT[M.CORAL] = mat('coral', 0xe8837a);
-MAT[M.METAL] = mat('metal', 0x7f8a8c);
-MAT[M.TILE] = mat('tile', 0xefe6d2);
-MAT[M.SEABED] = mat('seabed', 0xd8c89a);
-MAT[M.PLASTER_OCHRE] = mat('plaster', 0xe0a94e);
+MAT[M.CORAL] = mat('coral', 0xe8837a, { rough: true });
+MAT[M.METAL] = mat('metal', 0x7f8a8c, { style: 'wall' });
+MAT[M.TILE] = mat('tile', 0xefe6d2, { style: 'slab' });
+MAT[M.SEABED] = mat('seabed', 0xd8c89a, { rough: true, layers: 0xc4b286 });
+MAT[M.PLASTER_OCHRE] = mat('plaster', 0xe0a94e, { style: 'wall' });
+MAT[M.SANDSTONE] = mat('sandstone', 0xd48a58, { style: 'slab', rough: true, side: 0xc27546, layers: 0xa95f3a });
+MAT[M.SLAB] = mat('slab', 0xa9b2b6, { style: 'slab', rough: true, side: 0x939ca0, layers: 0x858d91 });
+MAT[M.SNOW] = mat('snow', 0xf2f6f8, { side: 0xc8dce6, rough: true, layers: 0xb3cad6 });
+MAT[M.ICE] = mat('ice', 0xbfe0ee, { style: 'slab', rough: true, layers: 0xa6cfe0 });
+MAT[M.MUD] = mat('mud', 0x6f5d48, { rough: true, layers: 0x5f4f3d });
+MAT[M.BASALT] = mat('basalt', 0x55585f, { style: 'slab', layers: 0x4a4d54 });
+MAT[M.ASH] = mat('ash', 0x74716e, { side: 0x55585f, rough: true, layers: 0x4a4d54 });
+MAT[M.LAVA] = mat('lava', 0xff7a2e, { emit: 0.95, style: 'slab' });
+MAT[M.CLAY] = mat('clay', 0xb8653c, { rough: true, layers: 0xa25533 });
+MAT[M.JGRASS] = mat('jungle', 0x4f9a45, { side: 0xb8653c, rough: true, layers: 0xa25533 });
+MAT[M.DRYGRASS] = mat('drygrass', 0xc2b36a, { side: 0xc98f5e, rough: true, layers: 0xb07a4c });
+MAT[M.REDROCK] = mat('redrock', 0xc9794a, { style: 'slab', rough: true, side: 0xb86a3e, layers: 0x9c5534 });
 
 export const key3 = (q, r, z) => ((z * 8192 + (r + 4096)) * 8192) + (q + 4096);
 export const nodeKey = (n) => key3(n.q, n.r, n.h);
@@ -169,6 +188,37 @@ export class HexWorld {
             }
         }
         return { prev, dist, at, order };
+    }
+
+    // nodes that lead into n in one move
+    predecessors(n, opts = {}) {
+        const out = [];
+        const k = nodeKey(n);
+        for (const [dq, dr] of DIRS) {
+            const q = n.q + dq;
+            const r = n.r + dr;
+            for (let h = n.h - 2; h <= n.h + (opts.maxDrop ?? 4); h++) {
+                const m = this.node(q, r, h);
+                if (m && this.neighbors(m, opts).some((x) => nodeKey(x) === k)) out.push(m);
+            }
+        }
+        return out;
+    }
+
+    // everywhere you can walk to from a and come back from: the playable ground
+    strongSet(a, opts = { hop: true }) {
+        const fwd = this.bfs(a, opts).prev;
+        const back = new Set([nodeKey(a)]);
+        const queue = [a];
+        for (let i = 0; i < queue.length; i++) {
+            for (const m of this.predecessors(queue[i], opts)) {
+                const k = nodeKey(m);
+                if (back.has(k) || !fwd.has(k)) continue;
+                back.add(k);
+                queue.push(m);
+            }
+        }
+        return back;
     }
 
     path(a, b, opts = {}, limit = Infinity) {

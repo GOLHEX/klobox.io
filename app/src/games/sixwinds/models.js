@@ -233,6 +233,139 @@ const PROP = {
             if (i % 2 === 1) k.cone(0.1, 0.24, flags[(i + p.seed) % flags.length], 0, 0, -0.13, { rot: [Math.PI, 0, 0], scale: [1, 0.3, 1], seg: 3 }, s);
         }
     },
+    // ---------------------------------------------------------- biome plants and stones
+    cactus(k) {
+        const { r } = k;
+        const h = 1.1 + r() * 0.9;
+        const g = [0x5f9a55, 0x6aa55c, 0x558f4c][Math.floor(r() * 3)];
+        k.cyl(0.15, 0.17, h, g, 0, 0, h / 2, { seg: 8 });
+        k.ball(0.15, g, 0, 0, h, { seg: 8, seg2: 5, scale: [1, 1, 0.7] });
+        for (const s of [-1, 1]) {
+            if (r() < 0.25) continue;
+            const z = h * (0.4 + r() * 0.25);
+            const arm = k.group(0, s * 0.16, z);
+            k.cyl(0.08, 0.09, 0.26, g, 0, s * 0.12, 0, { rot: [Math.PI / 2, 0, 0], seg: 6 }, arm);
+            k.cyl(0.08, 0.09, 0.45, g, 0, s * 0.24, 0.22, { seg: 6 }, arm);
+            k.ball(0.08, g, 0, s * 0.24, 0.45, { seg: 6, seg2: 4 }, arm);
+        }
+        if (r() < 0.4) k.ball(0.06, 0xf0a0c0, 0, 0, h + 0.12, { seg: 5, seg2: 4 });
+    },
+    agave(k) {
+        const { r } = k;
+        const g = r() < 0.5 ? 0x8fb89a : 0x9fbf7a;
+        for (let i = 0; i < 9; i++) {
+            const a = (i / 9) * Math.PI * 2 + r() * 0.3;
+            const l = k.group(0, 0, 0.05);
+            l.rotation.z = a;
+            k.cone(0.06, 0.55 + r() * 0.2, g, 0.16, 0, 0.18, { rot: [0, 0.75 + r() * 0.3, 0], seg: 3 }, l);
+        }
+    },
+    deadtree(k) {
+        const { r } = k;
+        const c = 0x8a7a68;
+        const h = 1.4 + r() * 1.2;
+        k.cyl(0.07, 0.13, h, c, 0, 0, h / 2, { seg: 6, rot: [(r() - 0.5) * 0.2, (r() - 0.5) * 0.2, 0] });
+        const branch = (x, y, z, len, ang, tilt, depth) => {
+            const g = k.group(x, y, z);
+            g.rotation.set(0, tilt, ang);
+            k.cyl(0.02 + depth * 0.02, 0.03 + depth * 0.025, len, c, 0, 0, len / 2, { seg: 5 }, g);
+            if (depth > 0) for (let i = 0; i < 2; i++) {
+                const b = k.group(0, 0, len * (0.6 + r() * 0.3), g);
+                b.rotation.set(0, 0.5 + r() * 0.4, (i ? 1 : -1) * (0.6 + r()));
+                k.cyl(0.015, 0.025, len * 0.55, c, 0, 0, len * 0.27, { seg: 4 }, b);
+            }
+        };
+        for (let i = 0; i < 3; i++) branch(0, 0, h * (0.55 + i * 0.15), 0.6 + r() * 0.4, r() * 6.28, 0.7 + r() * 0.5, 1);
+    },
+    bones(k) {
+        k.ball(0.14, 0xefe8d8, 0, 0, 0.1, { scale: [1.2, 1, 0.8], seg: 8, seg2: 6 });
+        for (const s of [-1, 1]) k.cone(0.03, 0.3, 0xefe8d8, 0.02, s * 0.14, 0.18, { rot: [s * 1.1, 0, 0], seg: 4 });
+        for (let i = 0; i < 3; i++) k.cyl(0.02, 0.02, 0.4, 0xe6dfcf, -0.3 + i * 0.1, 0.1, 0.03, { rot: [0, Math.PI / 2, 0.4], seg: 4 });
+    },
+    boulder(k, p) {
+        const { r } = k;
+        const c = p.color ?? [0xa8a39a, 0x9c978e, 0xb2ada4][Math.floor(r() * 3)];
+        k.add(new THREE.DodecahedronGeometry(0.34 + r() * 0.12, 0), c, 0, 0, 0.22, { rot: [r() * 3, r() * 3, r() * 3], scale: [1.2, 1, 0.75] });
+        if (r() < 0.5) k.add(new THREE.DodecahedronGeometry(0.18, 0), c, 0.32, 0.15, 0.1, { rot: [r() * 3, r() * 3, r() * 3] });
+    },
+    redboulder(k) { PROP.boulder(k, { color: [0xc47a4a, 0xb86a3e, 0xd48a58][Math.floor(k.r() * 3)] }); },
+    snowpine(k, p) {
+        const { r } = k;
+        const h = 1.6 + r() * 1.1;
+        k.cyl(0.08, 0.1, h * 0.35, 0x6b4a35, 0, 0, h * 0.17, { seg: 6 });
+        const snow = p.bare ? null : 0xf2f6f8;
+        for (let i = 0; i < 4; i++) {
+            const z = h * 0.25 + i * h * 0.19;
+            const rad = 0.62 - i * 0.13;
+            k.cone(rad, h * 0.32, 0x3f6f55, 0, 0, z + h * 0.16, { seg: 7 });
+            if (snow) k.cone(rad * 0.82, h * 0.1, snow, 0, 0, z + h * 0.27, { seg: 7 });
+        }
+    },
+    pine(k) { PROP.snowpine(k, { bare: true }); },
+    drift(k) { const { r } = k; k.ball(0.42 + r() * 0.2, 0xf4f8fa, 0, 0, -0.05, { scale: [1.4, 1, 0.45], seg: 10, seg2: 6 }); },
+    crystal(k) {
+        const { r } = k;
+        for (let i = 0; i < 4; i++) k.cone(0.07 + r() * 0.05, 0.4 + r() * 0.5, 0xbfe8f5, (r() - 0.5) * 0.4, (r() - 0.5) * 0.4, 0.2, { seg: 5, emit: 0.25, rot: [(r() - 0.5) * 0.6, (r() - 0.5) * 0.6, 0] });
+    },
+    reeds(k) {
+        const { r } = k;
+        for (let i = 0; i < 9; i++) {
+            const x = (r() - 0.5) * 0.6;
+            const y = (r() - 0.5) * 0.6;
+            const h = 0.5 + r() * 0.6;
+            k.cone(0.025, h, 0x8a9a55, x, y, h / 2, { seg: 3 });
+            if (r() < 0.35) k.cyl(0.04, 0.04, 0.14, 0x6b4a35, x, y, h * 0.92, { seg: 5 });
+        }
+    },
+    mushroom(k) {
+        const { r } = k;
+        for (let i = 0; i < 3; i++) {
+            const x = (r() - 0.5) * 0.5;
+            const y = (r() - 0.5) * 0.5;
+            const h = 0.15 + r() * 0.2;
+            k.cyl(0.035, 0.045, h, 0xefe6d2, x, y, h / 2, { seg: 5 });
+            k.add(new THREE.SphereGeometry(0.1 + r() * 0.06, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(Math.PI / 2), r() < 0.5 ? 0xc9483e : 0xb08a5a, x, y, h, {});
+        }
+    },
+    lily(k) {
+        const { r } = k;
+        k.g.position.z -= 0.08;
+        for (let i = 0; i < 3; i++) k.cyl(0.14 + r() * 0.08, 0.14, 0.02, 0x5f9a55, (r() - 0.5) * 0.5, (r() - 0.5) * 0.5, 0, { seg: 9 });
+        if (r() < 0.5) k.ball(0.05, 0xf0b0c8, 0.1, 0, 0.04, { seg: 6, seg2: 4 });
+    },
+    fern(k) {
+        const { r } = k;
+        for (let i = 0; i < 7; i++) {
+            const l = k.group(0, 0, 0.02);
+            l.rotation.z = (i / 7) * Math.PI * 2 + r() * 0.3;
+            k.box(0.55, 0.12, 0.02, i % 2 ? 0x4f8a45 : 0x5f9a4f, 0.26, 0, 0.12, { rot: [0, -0.5, 0] }, l);
+        }
+    },
+    bigleaf(k) {
+        const { r } = k;
+        k.cyl(0.03, 0.04, 0.5, 0x4a6a3a, 0, 0, 0.25, { seg: 4 });
+        for (let i = 0; i < 4; i++) {
+            const l = k.group(0, 0, 0.4 + i * 0.08);
+            l.rotation.z = i * 1.6 + r();
+            k.ball(0.3, i % 2 ? 0x3f8a45 : 0x4f9a50, 0.3, 0, 0, { scale: [1.3, 0.7, 0.08], rot: [0, 0.4, 0], seg: 8, seg2: 5 }, l);
+        }
+    },
+    charred(k) { PROP.deadtree(k); k.g.traverse((o) => { if (o.isMesh) { const c = o.geometry.attributes.color; for (let i = 0; i < c.count; i++) c.setXYZ(i, 0.18, 0.16, 0.15); } }); },
+    basaltspire(k) {
+        const { r } = k;
+        const h = 1.2 + r() * 1.6;
+        k.hexp(0.34, h, 0x55585f, 0, 0, h / 2);
+        k.hexp(0.26, h * 0.7, 0x4a4d54, 0.25, 0.2, h * 0.35);
+        k.hexp(0.36, 0.06, 0x6a6d74, 0, 0, h);
+    },
+    column(k, p) {
+        const { r } = k;
+        const h = p.broken ? 0.6 + r() * 0.8 : 1.9;
+        k.hexp(0.34, 0.18, 0xd8d2bf, 0, 0, 0.09);
+        k.cyl(0.2, 0.22, h, 0xe3dccb, 0, 0, 0.18 + h / 2, { seg: 10 });
+        if (!p.broken) k.box(0.55, 0.55, 0.16, 0xd8d2bf, 0, 0, h + 0.26);
+        else k.add(new THREE.DodecahedronGeometry(0.2, 0), 0xe3dccb, 0.35, 0.2, 0.12, { rot: [r(), r(), r()] });
+    },
     rail(k, p) {
         // a railing post and bar on the outer edge of a balcony hex
         const [cx, cy] = center(p.around[0], p.around[1]);
@@ -413,7 +546,7 @@ export function buildCreature(kind, def) {
             break;
         }
         case 'human': {
-            const p = buildPerson({ coat: c, hat: kind === 'thief' ? 'hood' : 'bandana', hatColor: kind === 'thief' ? 0x2a2f38 : 0xc9483e, weapon: def.gear ?? 'saber', seed: 9 });
+            const p = buildPerson({ coat: c, hat: def.hat ?? (kind === 'thief' ? 'hood' : 'bandana'), hatColor: def.hatColor ?? (kind === 'thief' ? 0x2a2f38 : 0xc9483e), weapon: def.gear ?? 'saber', seed: 9 });
             return p;
         }
         case 'serpent': {
@@ -423,6 +556,86 @@ export function buildCreature(kind, def) {
             eyes(k, parts.head, 0.18, 0.12, 0.14, 0.06, 0.5);
             k.cone(0.25, 0.5, 0x2f6a5a, -0.1, 0, 0.3, { rot: [0, -0.5, 0], scale: [0.4, 1, 1], seg: 4 }, parts.head);
             break;
+        }
+        case 'quad': {
+            // wolves, panthers, lambs: a body, a head, four legs, a tail
+            const sz = def.size ?? 1;
+            k.ball(0.3 * sz, c, 0, 0, 0.42 * sz, { scale: [1.5, 0.85, 0.8] }, body);
+            parts.head = k.group(0.42 * sz, 0, 0.55 * sz, body);
+            k.ball(0.18 * sz, c, 0, 0, 0, { scale: [1.2, 0.9, 0.9] }, parts.head);
+            if (def.snout !== false) k.cone(0.09 * sz, 0.2 * sz, def.accent ?? c, 0.17 * sz, 0, -0.03, { rot: [0, Math.PI / 2, 0], seg: 5 }, parts.head);
+            eyes(k, parts.head, 0.13 * sz, 0.05, 0.07 * sz, 0.03 * sz, def.glow ?? 0);
+            if (def.ears !== false) for (const s of [-1, 1]) k.cone(0.05 * sz, 0.13 * sz, c, -0.03, s * 0.09 * sz, 0.16 * sz, { seg: 4 }, parts.head);
+            if (def.wool) for (let i = 0; i < 7; i++) k.ball(0.14, 0xf2efe6, -0.2 + (i % 4) * 0.13, (i < 4 ? 1 : -1) * 0.08, 0.55, { seg: 6, seg2: 5 }, body);
+            for (const [x, y] of [[-0.25, -0.13], [0.25, -0.13], [-0.25, 0.13], [0.25, 0.13]]) parts.legs.push(k.box(0.08 * sz, 0.08 * sz, 0.3 * sz, def.accent ?? c, x * sz, y * sz, 0.15 * sz, {}, body));
+            k.cyl(0.03 * sz, 0.05 * sz, 0.35 * sz, c, -0.5 * sz, 0, 0.5 * sz, { rot: [0, -0.9, 0], seg: 5 }, body);
+            break;
+        }
+        case 'scorpion': {
+            k.ball(0.26, c, 0, 0, 0.2, { scale: [1.5, 1, 0.5] }, body);
+            eyes(k, body, 0.32, 0.24, 0.06, 0.035, 0.3);
+            for (const s of [-1, 1]) { const a = k.group(0.3, s * 0.22, 0.2, body); k.box(0.3, 0.07, 0.07, c, 0.12, 0, 0, { rot: [0, 0, s * 0.4] }, a); k.ball(0.09, c, 0.3, s * 0.08, 0, { scale: [1.4, 0.8, 0.6] }, a); if (s > 0) parts.arm = a; }
+            const tail = k.group(-0.36, 0, 0.22, body);
+            for (let i = 0; i < 4; i++) k.ball(0.08 - i * 0.008, c, -0.08 - i * 0.03, 0, 0.1 + i * 0.13, { seg: 6, seg2: 4 }, tail);
+            k.cone(0.05, 0.16, 0x2a2a2a, 0.02, 0, 0.62, { rot: [0, 1.8, 0], seg: 4 }, tail);
+            for (let i = 0; i < 6; i++) parts.legs.push(k.box(0.03, 0.03, 0.22, c, -0.12 + (i % 3) * 0.12, (i < 3 ? -1 : 1) * 0.24, 0.09, { rot: [(i < 3 ? 1 : -1) * 0.7, 0, 0] }, body));
+            break;
+        }
+        case 'snowman': {
+            k.ball(0.36, 0xf4f8fa, 0, 0, 0.36, {}, body);
+            k.ball(0.27, 0xf4f8fa, 0, 0, 0.88, {}, body);
+            parts.head = k.group(0, 0, 1.28, body);
+            k.ball(0.2, 0xf4f8fa, 0, 0, 0, {}, parts.head);
+            k.cone(0.04, 0.2, 0xe8892e, 0.24, 0, 0, { rot: [0, Math.PI / 2, 0], seg: 5 }, parts.head);
+            eyes(k, parts.head, 0.16, 0.06, 0.07, 0.03);
+            k.cyl(0.14, 0.16, 0.18, 0x2a2f38, 0, 0, 0.2, { seg: 8 }, parts.head);
+            for (const s of [-1, 1]) { const a = k.group(0, s * 0.26, 0.95, body); k.cyl(0.02, 0.02, 0.45, 0x6b4a35, 0, s * 0.18, 0.08, { rot: [s * 1.1, 0, 0], seg: 4 }, a); if (s > 0) parts.arm = a; }
+            k.box(0.06, 0.4, 0.06, c, 0.1, 0, 1.08, {}, body);
+            break;
+        }
+        case 'penguin': {
+            k.ball(0.22, 0x2a2f38, 0, 0, 0.3, { scale: [0.9, 0.9, 1.3] }, body);
+            k.ball(0.17, 0xf2efe6, 0.07, 0, 0.28, { scale: [0.8, 0.8, 1.2] }, body);
+            parts.head = k.group(0, 0, 0.62, body);
+            k.ball(0.13, 0x2a2f38, 0, 0, 0, {}, parts.head);
+            k.cone(0.04, 0.12, 0xf0a33a, 0.14, 0, -0.02, { rot: [0, Math.PI / 2, 0], seg: 4 }, parts.head);
+            eyes(k, parts.head, 0.09, 0.04, 0.05, 0.025);
+            for (const s of [-1, 1]) { const wg = k.group(0, s * 0.2, 0.38, body); k.box(0.1, 0.03, 0.26, 0x2a2f38, 0, 0, -0.08, { rot: [s * 0.3, 0, 0] }, wg); parts.wings.push(wg); }
+            for (const s of [-1, 1]) parts.legs.push(k.box(0.1, 0.06, 0.04, 0xf0a33a, 0.05, s * 0.08, 0.02, {}, body));
+            break;
+        }
+        case 'toad': {
+            k.ball(0.3, c, 0, 0, 0.22, { scale: [1.2, 1.1, 0.7] }, body);
+            parts.head = k.group(0.25, 0, 0.3, body);
+            k.ball(0.18, c, 0, 0, 0, { scale: [1, 1.3, 0.7] }, parts.head);
+            eyes(k, parts.head, 0.05, 0.12, 0.12, 0.05);
+            for (const s of [-1, 1]) parts.legs.push(k.box(0.3, 0.08, 0.06, def.accent ?? c, -0.15, s * 0.28, 0.06, { rot: [0, 0, s * 0.4] }, body));
+            break;
+        }
+        case 'lizard': {
+            k.ball(0.22, c, 0, 0, 0.55, { scale: [0.9, 0.8, 1.6] }, body);
+            parts.head = k.group(0.1, 0, 1.0, body);
+            k.ball(0.16, c, 0.05, 0, 0, { scale: [1.5, 0.9, 0.8] }, parts.head);
+            eyes(k, parts.head, 0.12, 0.05, 0.08, 0.03, 0.4);
+            k.cyl(0.03, 0.09, 0.8, c, -0.35, 0, 0.3, { rot: [0, -1.2, 0], seg: 5 }, body);
+            for (const s of [-1, 1]) parts.legs.push(k.box(0.09, 0.09, 0.36, def.accent ?? c, 0, s * 0.13, 0.18, {}, body));
+            for (const s of [-1, 1]) { const a = k.group(0.05, s * 0.2, 0.75, body); k.box(0.07, 0.07, 0.3, c, 0, 0, -0.12, {}, a); if (s > 0) parts.arm = a; }
+            break;
+        }
+        case 'wisp': {
+            k.ball(0.22, c, 0, 0, 0.9, { emit: 1 }, body);
+            k.ball(0.32, c, 0, 0, 0.9, { emit: 0.35, scale: [1, 1, 1.2] }, body);
+            for (let i = 0; i < 3; i++) { const wg = k.group(0, 0, 0.9, body); k.ball(0.06, 0xffffff, 0.4, 0, 0, { emit: 1, seg: 5, seg2: 4 }, wg); parts.wings.push(wg); }
+            break;
+        }
+        case 'bird': {
+            const g = buildCreature(kind, { ...def, model: 'gull' });
+            g.traverse((o) => { if (o.isMesh && o.geometry.attributes.color) { const cc = o.geometry.attributes.color; const t = new THREE.Color(c); const t2 = new THREE.Color(def.accent ?? c); for (let i = 0; i < cc.count; i++) if (cc.getX(i) > 0.8 && cc.getY(i) > 0.8) cc.setXYZ(i, (i % 2 ? t : t2).r, (i % 2 ? t : t2).g, (i % 2 ? t : t2).b); } });
+            return g;
+        }
+        case 'bonehuman': {
+            const p = buildPerson({ coat: c, skin: def.skin ?? 0xefe8d8, hat: def.hat ?? 'none', hatColor: def.hatColor ?? 0xefe8d8, hair: def.skin ?? 0xefe8d8, pants: def.pants ?? c, weapon: def.gear ?? 'saber', seed: 5 });
+            return p;
         }
         case 'pirateship':
             return buildShip({ hull: 0x2a2a30, sail: 0x3a3a40, flag: 0x111111 });

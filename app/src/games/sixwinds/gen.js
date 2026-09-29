@@ -12,9 +12,11 @@
 
 import { HexWorld, M, key3 } from './world.js';
 import { DIRS, center, hexAt, dist, disk, ring, mulberry32, noise2, LAYER } from './hex.js';
+import { POI_KINDS, defaultDoc } from './worlddoc.js';
+import { terrain, landIslands, decorate, smallPois, biomeSpawns, applyEdits, applyPropEdits } from './genbiome.js';
 
 export const SEA = 8;
-export const WORLD = { W: 176, D: 190, H: 44 };
+export const WORLD = { W: 224, D: 236, H: 48 };
 
 const ri = (rng, a, b) => a + Math.floor(rng() * (b - a + 1));
 const pick = (rng, a) => a[Math.floor(rng() * a.length)];
@@ -34,10 +36,10 @@ const lerp2 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 const dirIndex = (dq, dr) => DIRS.findIndex(([a, b]) => a === dq && b === dr);
 
 class Builder {
-    constructor(seed) {
+    constructor(seed, size = WORLD) {
         this.rng = mulberry32(seed);
         this.noise = noise2(seed * 7 + 1);
-        this.w = new HexWorld(WORLD.W, WORLD.D, WORLD.H, SEA);
+        this.w = new HexWorld(size.W, size.D, size.H ?? WORLD.H, SEA);
         this.props = [];
         this.npcs = [];
         this.spawns = [];
@@ -154,31 +156,59 @@ class Builder {
 }
 
 // ---------------------------------------------------------------- the world
-export function generateWorld(seed = 7) {
-    const b = new Builder(seed);
-    const isl = {
-        wharf: { x: 58, y: 70, r: 26 },
-        azure: { x: 128, y: 64, r: 26 },
-        sluice: { x: 104, y: 128, r: 22 },
-        rock: { x: 30, y: 30, r: 9 },
-        wreck: { x: 82, y: 24, r: 8 },
-        reef: { x: 152, y: 128, r: 13 },
-    };
+const TEMPLATES = { wharf: (b, I) => wharf(b, I), azure: (b, I) => azure(b, I), sluice: (b, I) => sluice(b, I), rockislet: (b, I) => rockIslet(b, I), wreck: (b, I) => wreckIslet(b, I), reef: (b, I) => reef(b, I) };
+const TPL_ISLAND = { wharf: 'wharf', azure: 'azure', sluice: 'sluice', rockislet: 'rock', wreck: 'wreck', reef: 'reef' };
+
+// input: a world document (see worlddoc.js) or a seed for the default archipelago
+export function generateWorld(input = 7) {
+    const doc = input && typeof input === 'object' ? input : defaultDoc(input);
+    const b = new Builder(doc.seed ?? 7, doc.size ?? WORLD);
+    b.doc = doc;
+    b.npcDefs = {};
+    b.quests = {};
+    const isl = {};
+    for (const p of doc.pois) {
+        const K = POI_KINDS[p.kind];
+        if (!K?.template) continue;
+        isl[TPL_ISLAND[p.kind]] = { x: p.x, y: p.y, r: K.r, tpl: p.kind, name: p.name };
+    }
     b.isl = isl;
-    seaFloor(b, isl);
-    wharf(b, isl.wharf);
-    azure(b, isl.azure);
-    sluice(b, isl.sluice);
-    rockIslet(b, isl.rock);
-    wreckIslet(b, isl.wreck);
-    reef(b, isl.reef);
+    const field = terrain(b, doc, isl, SEA);
+    for (const I of Object.values(isl)) TEMPLATES[I.tpl](b, I);
+    landIslands(b, doc, field, isl, SEA);
+    applyEdits(b, doc, SEA);
+    decorate(b, doc, field, isl, SEA);
+    smallPois(b, doc, field, isl, SEA);
+    biomeSpawns(b, doc, field, isl);
     seaZones(b, isl);
+    applyPropEdits(b, doc);
+    if (!b.start) b.start = anyStart(b, isl);
     const w = b.w;
     const reach = settle(b, isl);
+    const islands = {};
+    const meta = {};
+    for (const [id, I] of Object.entries(isl)) {
+        islands[id] = { x: I.x, y: I.y, r: I.r };
+        meta[id] = { name: I.name, biome: I.biome ?? null, lvl: I.lvl ?? null };
+    }
     return {
         world: w, props: b.props, npcs: b.npcs, spawns: b.spawns, nodes: b.nodes, docks: b.docks,
-        stations: b.stations, lights: b.lights, labels: b.labels, islands: isl, start: b.start, seed, reach,
+        stations: b.stations, lights: b.lights, labels: b.labels, islands, islandMeta: meta, start: b.start, seed: doc.seed, reach,
+        npcDefs: b.npcDefs, quests: b.quests, questStart: b.questStart ?? [], doc, biomes: field.biome, landKind: field.land,
     };
+}
+
+// with no wharf in the document, start on the biggest island by the sea
+function anyStart(b, isl) {
+    const w = b.w;
+    let best = null;
+    for (const d of b.docks) { const n = w.node(...d.land); if (n) { best = { q: n.q, r: n.r, h: n.h }; break; } }
+    if (best) return best;
+    for (const I of Object.values(isl)) {
+        for (const [q, r] of I.cells ?? []) { const s = w.surface(q, r); if (w.node(q, r, s)) return { q, r, h: s }; }
+    }
+    for (const [q, r] of b.columns()) { const s = w.surface(q, r); if (s > SEA && w.node(q, r, s)) return { q, r, h: s }; }
+    return { q: 5, r: 5, h: SEA + 1 };
 }
 
 // the island a point belongs to
@@ -201,20 +231,21 @@ function settle(b, isl) {
     const reach = {};
     for (const [id, I] of Object.entries(isl)) {
         let best = null;
-        if (id === 'wharf') best = w.bfs(w.node(b.start.q, b.start.r, b.start.h), { hop: true }).prev;
+        const dock = b.docks.find((d) => d.island === id && w.node(...d.land));
+        if (id === 'wharf' && b.start && w.node(b.start.q, b.start.r, b.start.h)) best = w.strongSet(w.node(b.start.q, b.start.r, b.start.h));
+        else if (dock && I.land) best = w.strongSet(w.node(...dock.land));
         else {
             const seen = new Set();
             const [cq, cr] = hexAt(I.x, I.y);
-            for (const [q, r] of disk(cq, cr, Math.ceil(I.r))) {
+            for (const [q, r] of I.cells ?? disk(cq, cr, Math.ceil(I.r))) {
                 const n = w.node(q, r, w.surface(q, r));
                 if (!n || seen.has(key3(q, r, n.h))) continue;
-                const { prev } = w.bfs(n, { hop: true });
-                for (const k of prev.keys()) seen.add(k);
+                const prev = w.strongSet(n);
+                for (const k of prev) seen.add(k);
                 if (!best || prev.size > best.size) best = prev;
             }
         }
-        const set = new Set(best ? best.keys() : []);
-        reach[id] = set;
+        reach[id] = best ?? new Set();
     }
     const inSet = (set, q, r, h) => set.has(key3(q, r, h));
     const nodesOf = (set) => [...set].map((k) => {
@@ -243,9 +274,19 @@ function settle(b, isl) {
         w.block(n.q, n.r, n.h, 3);
         set.delete(key3(n.q, n.r, n.h));
     }
+    // gathering spots nobody can walk to are taken away
+    b.nodes = b.nodes.filter((n) => {
+        if (['fishspot', 'algae', 'wreck'].includes(n.kind)) return true;
+        const [x, y] = center(n.q, n.r);
+        const set = reach[islandOf(isl, x, y)];
+        if (!set || touches(set, n.q, n.r, n.h)) return true;
+        w.unblock(n.q, n.r, n.h, 2);
+        return false;
+    });
     // a dock: walkable ground right next to water a ship can float in
     for (const d of b.docks) {
         const set = reach[d.island];
+        if (!set) continue;
         const [wx, wy] = center(d.q, d.r);
         let best = null;
         for (const [q, r, h] of nodesOf(set)) {
@@ -755,10 +796,11 @@ function reef(b, I) {
 }
 
 function seaZones(b, isl) {
-    b.zone('serpent', [9, 14], (isl.wharf.x + isl.azure.x) / 2, (isl.wharf.y + isl.azure.y) / 2 + 10, 12, 3, 'sea', { sea: true });
-    b.zone('serpent', [10, 15], isl.wreck.x + 8, isl.wreck.y + 8, 10, 3, 'sea', { sea: true });
-    b.zone('pirate', [12, 17], (isl.azure.x + isl.sluice.x) / 2 + 12, (isl.azure.y + isl.sluice.y) / 2, 12, 2, 'sea', { sea: true });
-    b.zone('pirate', [14, 18], isl.reef.x - 12, isl.reef.y - 18, 10, 2, 'sea', { sea: true });
+    const z = (kind, lvl, A, B, dy, rad, n) => { if (isl[A] && isl[B]) b.zone(kind, lvl, (isl[A].x + isl[B].x) / 2, (isl[A].y + isl[B].y) / 2 + dy, rad, n, 'sea', { sea: true }); };
+    z('serpent', [9, 14], 'wharf', 'azure', 10, 12, 3);
+    if (isl.wreck) b.zone('serpent', [10, 15], isl.wreck.x + 8, isl.wreck.y + 8, 10, 3, 'sea', { sea: true });
+    if (isl.azure && isl.sluice) b.zone('pirate', [12, 17], (isl.azure.x + isl.sluice.x) / 2 + 12, (isl.azure.y + isl.sluice.y) / 2, 12, 2, 'sea', { sea: true });
+    if (isl.reef) b.zone('pirate', [14, 18], isl.reef.x - 12, isl.reef.y - 18, 10, 2, 'sea', { sea: true });
 }
 
 export { key3 };

@@ -3,6 +3,7 @@
 
 import { CLASSES, SKILLS, ITEMS, RARITY, PROFS, NPCS, SHOPS, QUESTS, RECIPES, STATIONS, ISLANDS, MONSTERS, STATS, XP_TO } from './data.js';
 import { INV_SIZE } from './sim.js';
+import { drawInkMap } from './inkmap.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -408,53 +409,56 @@ export class UI {
     wMap() {
         const g = this.g;
         const h = g.hero;
-        const img = this.ctx.mapImage;
-        const W = img.width;
-        const H = Math.round(img.height * 0.866);
-        this.frame('Карта архипелага', `<canvas id="map" width="${W * 3}" height="${H * 3}"></canvas><div class="meta" style="margin-top:6px">${h.compass ? 'Компас показывает цели заданий (жёлтые) и причалы (⚓).' : 'Без компаса видно только острова. Карту уточнит Картограф Мира.'}</div>`);
-        const c = $('map').getContext('2d');
-        c.imageSmoothingEnabled = true;
-        c.drawImage(img, 0, 0, W * 3, H * 3);
-        const P = (x, y) => [x * 3, (img.height * 0.866 - y) * 3];
-        c.font = '700 28px Caveat, cursive';
-        c.textAlign = 'center';
-        for (const [id, I] of Object.entries(g.gen.islands)) {
-            let [x, y] = P(I.x, I.y - I.r - 2);
-            const tw = c.measureText(`${ISLANDS[id].name} · ${ISLANDS[id].lvl}`).width;
-            x = Math.max(tw / 2 + 6, Math.min(W * 3 - tw / 2 - 6, x));
-            y = Math.max(30, Math.min(H * 3 - 10, y + 10));
-            const seen = h.visited[id];
-            c.fillStyle = seen ? '#23282c' : 'rgba(35,40,44,0.45)';
-            c.strokeStyle = 'rgba(243,236,218,0.9)';
-            c.lineWidth = 4;
-            const t = `${ISLANDS[id].name} · ${ISLANDS[id].lvl}`;
-            c.strokeText(t, x, y);
-            c.fillText(t, x, y);
+        // the atlas is inked once per world, markers go on a copy
+        if (!this.atlas || this.atlas.gen !== g.gen) {
+            const cv = document.createElement('canvas');
+            const res = drawInkMap(cv, g.gen, { scale: 4 });
+            this.atlas = { gen: g.gen, cv, res };
         }
+        const { cv, res } = this.atlas;
+        this.frame('Карта архипелага', `<div class="mapwrap"><canvas id="map" width="${cv.width}" height="${cv.height}"></canvas></div><div class="meta" style="margin-top:6px">${h.compass ? 'Компас отмечает людей с заданиями: жёлтое «!» — новое, бирюзовое «?» — сдать.' : 'Без компаса видно только острова. Компас даст Картограф Мира.'} Пунктир — морские пути и время в дороге.</div>`);
+        const c = $('map').getContext('2d');
+        c.drawImage(cv, 0, 0);
+        const P = (x, y) => res.P(x, y);
         if (h.compass) {
             c.font = '800 16px Nunito, sans-serif';
-            for (const d of g.docks) { const [x, y] = P(d.x, d.y); c.fillStyle = '#23282c'; c.fillText('⚓', x, y + 6); }
+            c.textAlign = 'center';
             for (const n of g.npcs) {
                 const m = g.npcMark(n.id);
                 if (!m) continue;
                 const [x, y] = P(n.x, n.y);
                 c.fillStyle = m === '?' ? '#23777d' : '#e0a94e';
+                c.strokeStyle = '#1f1d1b';
+                c.lineWidth = 2;
                 c.beginPath();
-                c.arc(x, y, 7, 0, Math.PI * 2);
+                c.arc(x, y, 9, 0, Math.PI * 2);
                 c.fill();
+                c.stroke();
                 c.fillStyle = '#fff';
-                c.fillText(m, x, y + 5);
+                c.fillText(m, x, y + 6);
             }
         }
-        if (g.ship && !h.sailing) { const [x, y] = P(g.ship.x, g.ship.y); c.fillStyle = '#8a6446'; c.fillRect(x - 5, y - 5, 10, 10); }
+        if (g.ship && !h.sailing) { const [x, y] = P(g.ship.x, g.ship.y); c.fillStyle = '#8a6446'; c.strokeStyle = '#1f1d1b'; c.lineWidth = 2; c.fillRect(x - 6, y - 6, 12, 12); c.strokeRect(x - 6, y - 6, 12, 12); }
         const [x, y] = P(h.body.x, h.body.y);
-        c.fillStyle = '#c9483e';
-        c.strokeStyle = '#23282c';
+        c.fillStyle = '#c8392b';
+        c.strokeStyle = '#1f1d1b';
         c.lineWidth = 3;
         c.beginPath();
-        c.arc(x, y, 9, 0, Math.PI * 2);
+        c.arc(x, y, 10, 0, Math.PI * 2);
         c.fill();
         c.stroke();
+        c.beginPath();
+        c.moveTo(x + Math.cos(h.face) * 20, y - Math.sin(h.face) * 20);
+        c.lineTo(x + Math.cos(h.face + 2.6) * 10, y - Math.sin(h.face + 2.6) * 10);
+        c.lineTo(x + Math.cos(h.face - 2.6) * 10, y - Math.sin(h.face - 2.6) * 10);
+        c.closePath();
+        c.fill();
+        c.stroke();
+        // open centred on the hero
+        const wrap = $('win').querySelector('.mapwrap');
+        const k = wrap.clientWidth / cv.width;
+        void k;
+        requestAnimationFrame(() => { const el = $('map'); const sx = (x / cv.width) * el.clientWidth; const sy = (y / cv.height) * el.clientHeight; wrap.scrollLeft = sx - wrap.clientWidth / 2; wrap.scrollTop = sy - wrap.clientHeight / 2; });
     }
 
     // ---------------------------------------------------------- people

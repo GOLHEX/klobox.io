@@ -14,18 +14,12 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { DIRS, NORMALS, LAYER, SQ3, CIRC, center, hexAt } from './hex.js';
 import { M, MAT } from './world.js';
 import { buildProp, buildNode, buildPerson, buildCreature, buildShip, buildLoot } from './models.js';
+import { meshChunk } from './mesher.js';
 
 const CH = 16; // chunk size in offset columns and rows
 const MAXL = 12; // point lights
 export const PITCH = 0.62; // camera elevation, radians
 
-// surface patterns drawn in the shader, by material
-const PAT = {
-    [M.SAND]: 8, [M.GRASS]: 7, [M.DIRT]: 8, [M.STONE]: 2, [M.COBBLE]: 6, [M.CONCRETE]: 5, [M.WOOD]: 3,
-    [M.PLASTER_RED]: 1, [M.PLASTER_TEAL]: 1, [M.PLASTER_BLUE]: 1, [M.PLASTER_CREAM]: 1, [M.PLASTER_OCHRE]: 1,
-    [M.ROOF_RED]: 4, [M.ROOF_TEAL]: 4, [M.BRICK]: 2, [M.ROCK]: 9, [M.MOSS]: 7, [M.GLOW]: 11, [M.DARKWOOD]: 3,
-    [M.LEAVES]: 7, [M.CORAL]: 9, [M.METAL]: 10, [M.TILE]: 12, [M.SEABED]: 8,
-};
 
 // ------------------------------------------------------------------ shaders
 const COMMON = /* glsl */ `
@@ -118,6 +112,7 @@ uniform float uSeaZ;
 uniform float uFlash;
 uniform vec3 uRim;
 uniform float uFade;
+uniform float uHatchK;
 ${COMMON}
 
 float shadowAt(vec3 s, float bias) {
@@ -135,7 +130,7 @@ float pattern(float pat, vec3 w, vec3 n, inout float tone) {
     bool top = n.z > 0.5;
     float u = dot(w.xy, vec2(-n.y, n.x));
     float v = w.z;
-    float seam = top ? ink(hexEdge(w.xy), w.x + w.y, 1.2) : 0.0;
+    float seam = top ? ink(hexEdge(w.xy), w.x + w.y, 1.0) * 0.4 : 0.0;
     float l = 0.0;
     if (pat < 0.5) return 0.0;
     if (pat < 1.5) { // plaster: flecks, a line at every storey
@@ -197,7 +192,44 @@ float pattern(float pat, vec3 w, vec3 n, inout float tone) {
     } else if (pat < 12.5) { // hex tiles
         vec2 c = hexCenter(w.xy * 2.0);
         tone *= mod(c.x + c.y * 0.577, 1.0) < 0.5 ? 1.0 : 0.9;
-        l = top ? ink(hexEdge(w.xy * 2.0) * 0.5, w.x, 1.0) * 0.4 + seam * 0.4 : grid(v, 0.25, 1.0) * 0.3;
+        l = top ? ink(hexEdge(w.xy * 2.0) * 0.5, w.x, 1.0) * 0.4 : grid(v, 0.25, 1.0) * 0.3;
+    } else if (pat < 13.5) { // natural sides: strata, grain and the odd crack
+        float lay = floor(v / 0.5);
+        tone *= 0.93 + 0.12 * hash(vec2(lay, floor(u * 1.2)));
+        float ck = step(0.72, hash(vec2(lay, floor(u * 1.6))));
+        l = grid(v + 0.03, 0.5, 1.0) * 0.28 + ink(abs(fract(u * 1.6) - 0.5) * 0.3, u, 0.8) * ck * 0.25;
+        l += step(0.93, hash(floor(vec2(u * 7.0, v * 16.0)))) * 0.14;
+    } else if (pat < 14.5) { // stone slabs: a crack or two, worn smooth in the middle
+        if (top) {
+            vec2 c = hexCenter(w.xy);
+            vec2 d = w.xy - c;
+            float h = hash(c);
+            float ang = h * 6.2831;
+            vec2 dir = vec2(cos(ang), sin(ang));
+            vec2 nrm = vec2(-dir.y, dir.x);
+            float off = (hash(c + 3.1) - 0.5) * 0.24;
+            float cr = abs(dot(d, nrm) - off + (vnoise(w.xy * 11.0) - 0.5) * 0.035);
+            float along = dot(d, dir);
+            float on = step(0.4, h) * (1.0 - smoothstep(0.12, 0.4, abs(along - (h - 0.5) * 0.3)));
+            float h2 = hash(c + 7.7);
+            vec2 dir2 = vec2(cos(ang + 1.3), sin(ang + 1.3));
+            float cr2 = abs(dot(d - dir * off, vec2(-dir2.y, dir2.x)) + (vnoise(w.xy * 13.0 + 4.0) - 0.5) * 0.03);
+            float on2 = step(0.7, h2) * step(0.0, dot(d - dir * off, dir2)) * (1.0 - smoothstep(0.1, 0.28, length(d - dir * off)));
+            l = ink(cr, w.x + w.y, 0.9) * on * 0.55 + ink(cr2, w.x - w.y, 0.8) * on2 * 0.45;
+            tone *= (0.95 + 0.08 * vnoise(w.xy * 2.7)) * (1.0 + 0.05 * (1.0 - smoothstep(0.08, 0.42, length(d))));
+            l += step(0.96, hash(floor(w.xy * 14.0))) * 0.12;
+        } else {
+            float lay = floor(v / 0.5);
+            tone *= 0.93 + 0.12 * hash(vec2(lay, floor(u * 1.2)));
+            l = grid(v + 0.03, 0.5, 1.0) * 0.28;
+        }
+    } else if (pat < 15.5) { // snow: soft drifts, a glint here and there
+        tone *= 0.97 + 0.05 * vnoise(w.xy * 0.9);
+        l = step(0.985, hash(floor((top ? w.xy : vec2(u, v)) * 13.0))) * 0.1;
+    } else if (pat < 16.5) { // mud: darker wet patches
+        float wet = smoothstep(0.55, 0.7, vnoise(w.xy * 0.8));
+        tone *= mix(1.0, 0.8, wet);
+        l = step(0.95, hash(floor(w.xy * 10.0))) * 0.25;
     }
     return l;
 }
@@ -223,7 +255,7 @@ void main() {
     float cloud = smoothstep(0.45, 0.75, vnoise(vW.xy * 0.035 + vec2(uTime * 0.012, uTime * 0.004)));
     float lit = smoothstep(-0.02, 0.12, ndl) * sh * (1.0 - cloud * 0.45 * (1.0 - uNight));
     vec3 light = mix(uShade, uSun, lit);
-    light *= mix(0.9, 1.04, clamp(n.z, 0.0, 1.0));
+    light *= mix(vec3(0.82, 0.8, 0.84), vec3(1.04, 1.03, 1.0), n.z * 0.5 + 0.5);
     light *= mix(0.62, 1.0, vAo);
     // lamps
     vec3 lamp = vec3(0.0);
@@ -254,7 +286,7 @@ void main() {
         float h2 = abs(fract((fc.x - fc.y) / (hs * 1.4)) - 0.5) * hs * 1.4;
         hatch = max(hatch, (1.0 - smoothstep(0.35, 1.1, h2)) * 0.5);
     }
-    col = mix(col, col * vec3(0.5, 0.58, 0.68), hatch * 0.42 * (1.0 - vEmit));
+    col = mix(col, col * vec3(0.5, 0.58, 0.68), hatch * uHatchK * (1.0 - vEmit));
     // things that glow
     col = mix(col, vColor * (1.15 + 0.25 * uNight), clamp(vEmit, 0.0, 1.0));
     if (vPat > 10.5 && vPat < 11.5) col += vColor * (0.25 + 0.2 * sin(uTime * 2.0 + vW.x * 0.5)) * (0.4 + uNight);
@@ -263,7 +295,7 @@ void main() {
     col += uRim * pow(1.0 - abs(dot(n, -uCamFwd)), 2.0);
     // the world fades into the paper at its borders
     float edge = min(min(vW.x - uBounds.x, uBounds.z - vW.x), min(vW.y - uBounds.y, uBounds.w - vW.y));
-    float f = smoothstep(2.0, 3.5, edge + (vnoise(vW.xy * 0.4) - 0.5) * 3.0 + (hash(floor(vW.xy * 3.0)) - 0.5) * 0.6) * uFade;
+    float f = smoothstep(1.0, 6.0, edge + (vnoise(vW.xy * 0.25) - 0.5) * 5.0) * uFade;
     col = mix(uPaper, col, f);
     oColor = vec4(col, 1.0);
     oNormal = vec4(n * 0.5 + 0.5, f);
@@ -345,7 +377,7 @@ void main() {
     float dark = step(0.72, vnoise(sp * vec2(0.5, 2.6) - 9.0 - uTime * 0.02)) * rip;
     col = mix(col, deep * 0.5, dark * 0.55);
     float edge = min(min(vW.x - uBounds.x, uBounds.z - vW.x), min(vW.y - uBounds.y, uBounds.w - vW.y));
-    float f = smoothstep(2.0, 3.5, edge + (vnoise(vW.xy * 0.4) - 0.5) * 3.0 + (hash(floor(vW.xy * 3.0)) - 0.5) * 0.6);
+    float f = smoothstep(1.0, 6.0, edge + (vnoise(vW.xy * 0.25) - 0.5) * 5.0);
     col = mix(uPaper, col, f);
     float alpha = mix(0.58, 0.94, smoothstep(0.0, 0.55, dN));
     alpha = mix(alpha, 1.0, foam * 0.5);
@@ -423,6 +455,7 @@ uniform vec3 uInkCol;
 uniform vec2 uHatchOff;
 uniform float uNight;
 uniform vec3 uCutScreen;
+uniform float uInk;
 ${COMMON}
 float D(vec2 uv) { return texture(tDepth, uv).r * uRange; }
 void main() {
@@ -449,8 +482,10 @@ void main() {
     m = min(m, dot(N0, nr.xyz * 2.0 - 1.0));
     m = min(m, dot(N0, nd.xyz * 2.0 - 1.0));
     m = min(m, dot(N0, nu.xyz * 2.0 - 1.0));
-    // right-angle creases are drawn fully, the 60 degree turns of hex walls lightly
-    float en = (smoothstep(0.86, 0.7, m) * 0.4 + smoothstep(0.4, 0.2, m) * 0.6) * step(0.5, n0.a);
+    // ink: every crease; paint: only the sharp ones, bevels stay soft
+    float enInk = smoothstep(0.86, 0.7, m) * 0.4 + smoothstep(0.4, 0.2, m) * 0.6;
+    float enPaint = smoothstep(0.55, 0.25, m) * 0.8;
+    float en = mix(enPaint, enInk, uInk) * step(0.5, n0.a);
     float mask = max(max(n0.a, max(nl.a, nr.a)), max(nd.a, nu.a));
     float edge = max(ed, en) * mask;
     // pressure varies along a stroke
@@ -462,7 +497,9 @@ void main() {
         float h2 = abs(fract((px.x - px.y) / 11.0) - 0.5) * 11.0;
         col = mix(col * vec3(0.9, 0.88, 0.84), uInkCol, (1.0 - smoothstep(0.4, 1.2, h)) * 0.55 + (1.0 - smoothstep(0.4, 1.2, h2)) * 0.25);
     }
-    col = mix(col, uInkCol, edge * 0.92);
+    // painted lines take the colour of what they outline, darkened
+    vec3 lineCol = mix(texture(tColor, vUv).rgb * vec3(0.32, 0.3, 0.34), uInkCol, uInk);
+    col = mix(col, lineCol, edge * mix(0.8, 0.92, uInk));
     // paper: grain and fibres, a warm vignette
     float g = hash(floor(gl_FragCoord.xy)) * 0.5 + vnoise(gl_FragCoord.xy / 3.0) * 0.5;
     col *= 0.965 + 0.05 * g;
@@ -571,6 +608,7 @@ export class View {
             uLightCol: { value: lightCols },
             uHatchOff: { value: new THREE.Vector2() },
             uHatchScale: { value: 6 },
+            uHatchK: { value: 0.18 },
             uCut: { value: new THREE.Vector4(0, 0, 0, 0) },
             uCamFwd: { value: new THREE.Vector3() },
             uCamRight: { value: new THREE.Vector2(1, 0) },
@@ -597,7 +635,7 @@ export class View {
             uniforms: {
                 tColor: { value: this.rt.textures[0] }, tNormal: { value: this.rt.textures[1] }, tDepth: { value: this.rt.depthTexture },
                 uTexel: { value: new THREE.Vector2() }, uRange: { value: 259 }, uLine: { value: 1 }, uPaper: this.U.uPaper, uInkCol: this.U.uInkCol,
-                uHatchOff: this.U.uHatchOff, uNight: this.U.uNight, uCutScreen: { value: new THREE.Vector3() },
+                uHatchOff: this.U.uHatchOff, uNight: this.U.uNight, uCutScreen: { value: new THREE.Vector3() }, uInk: { value: 0 },
             },
         }));
         this.post.frustumCulled = false;
@@ -605,11 +643,27 @@ export class View {
         this.postScene.add(this.post);
         this.postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
-        // chunks of the world, built lazily around the camera
         this.chunks = new Map();
+        this.nodes = new Map();
+        this.setWorld(gen);
+        this.actors = new Map();
+        this.initMarkers();
+        this.initParticles();
+        this.resize();
+    }
+
+    // a new world (the editor regenerates): drop the old chunks and nodes, index the new ones
+    setWorld(gen) {
+        this.gen = gen;
+        this.world = gen.world;
+        const W = this.world;
+        this.bounds.set(0.5, 0.5, W.W - 1, ((W.D - 1) * SQ3) / 2);
+        for (const g of this.chunks.values()) { this.scene.remove(g); disposeTree(g); }
+        this.chunks.clear();
+        for (const m of this.nodes.values()) { this.scene.remove(m); m.geometry.dispose(); }
+        this.nodes.clear();
         this.propsByChunk = new Map();
         for (const p of gen.props) this.chunkList(this.propsByChunk, p.q, p.r).push(p);
-        this.nodes = new Map();
         for (const n of gen.nodes) {
             if (n.kind === 'fishspot') continue;
             const g = buildNode(n);
@@ -620,10 +674,18 @@ export class View {
             this.nodes.set(n.id, mesh);
         }
         this.lightList = gen.lights.map((l) => { const [x, y] = center(l.q, l.r); return { x, y, z: l.z * LAYER, color: new THREE.Color(l.color), range: l.range }; });
-        this.actors = new Map();
-        this.initMarkers();
-        this.initParticles();
-        this.resize();
+        this.U.uSeaZ.value = W.sea * LAYER;
+        this.loadAll = true;
+    }
+
+    // rebuild the chunks around some columns after a hand edit
+    refreshAround(q, r) {
+        const col = q + (r - (r & 1)) / 2;
+        for (const [dc, dr] of [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]]) {
+            const k = (Math.floor((r + dr) / CH) + 64) * 256 + Math.floor((col + dc) / CH) + 64;
+            const g = this.chunks.get(k);
+            if (g) { this.scene.remove(g); disposeTree(g); this.chunks.delete(k); }
+        }
     }
 
     makeMain(extra = {}) {
@@ -647,139 +709,20 @@ export class View {
 
     // ---------------------------------------------------------- meshing
     buildChunk(cx, cy) {
-        const w = this.world;
-        const { W, D, H } = w;
-        const cells = w.cells;
-        const pos = [];
-        const nor = [];
-        const col = [];
-        const emi = [];
-        const pat = [];
-        const aos = [];
-        const idx = [];
-        const wpos = [];
-        const wdep = [];
-        const widx = [];
-        const solidAt = (q, r, z) => {
-            if (z < 0) return true;
-            if (z >= H) return false;
-            const c = q + (r - (r & 1)) / 2;
-            if (c < 0 || c >= W || r < 0 || r >= D) return false;
-            return MAT[cells[(z * D + r) * W + c]].solid === true;
-        };
-        const mAt = (q, r, z) => {
-            const c = q + (r - (r & 1)) / 2;
-            if (c < 0 || c >= W || r < 0 || r >= D || z < 0 || z >= H) return z < w.sea && z >= 0 ? M.WATER : M.AIR;
-            return cells[(z * D + r) * W + c];
-        };
-        // column water depth: layers of water above the floor
-        const depthOf = (q, r) => {
-            let k = w.sea - 1;
-            if (mAt(q, r, k) !== M.WATER) return 0;
-            let d = 0;
-            while (k >= 0 && mAt(q, r, k) === M.WATER) { d++; k--; }
-            return d;
-        };
-        const CX = [];
-        const CY = [];
-        for (let j = 0; j < 6; j++) { const a = ((30 + 60 * j) * Math.PI) / 180; CX.push(Math.cos(a) * CIRC); CY.push(Math.sin(a) * CIRC); }
-        const quad = (verts, n, c, e, p, a) => {
-            const base = pos.length / 3;
-            for (let i = 0; i < 4; i++) {
-                pos.push(...verts[i]);
-                nor.push(n[0], n[1], n[2]);
-                col.push(...c);
-                emi.push(e);
-                pat.push(p);
-                aos.push(a[i]);
-            }
-            idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-        };
-        for (let row = cy * CH; row < Math.min(D, cy * CH + CH); row++) {
-            for (let c = cx * CH; c < Math.min(W, cx * CH + CH); c++) {
-                const q = c - (row - (row & 1)) / 2;
-                const r = row;
-                const [x, y] = center(q, r);
-                for (let z = 0; z < H; z++) {
-                    const m = cells[(z * D + r) * W + c];
-                    const mt = MAT[m];
-                    if (m === M.WATER) {
-                        if (mAt(q, r, z + 1) === M.WATER || solidAt(q, r, z + 1)) continue;
-                        // the water's surface: a hex fan with depth per corner for the gradient
-                        const zz = (z + 1) * LAYER - 0.1;
-                        const dc = depthOf(q, r) + (z + 1 - w.sea);
-                        const nd = DIRS.map(([dq, dr]) => (mAt(q + dq, r + dr, z) === M.WATER ? depthOf(q + dq, r + dr) + (z + 1 - w.sea) : 0));
-                        const base = wpos.length / 3;
-                        wpos.push(x, y, zz);
-                        wdep.push(dc);
-                        for (let j = 0; j < 6; j++) {
-                            wpos.push(x + CX[j], y + CY[j], zz);
-                            wdep.push((dc + nd[j] + nd[(j + 1) % 6]) / 3);
-                        }
-                        for (let j = 0; j < 6; j++) widx.push(base, base + 1 + j, base + 1 + ((j + 1) % 6));
-                        continue;
-                    }
-                    if (!mt.solid) continue;
-                    const k = 0.95 + hash3(q, r, z) * 0.09;
-                    const p = PAT[m] ?? 0;
-                    // top
-                    if (!solidAt(q, r, z + 1)) {
-                        const zz = (z + 1) * LAYER;
-                        const cc = tint(mt.color, k);
-                        const occ = DIRS.map(([dq, dr]) => (solidAt(q + dq, r + dr, z + 1) ? 1 : 0));
-                        const base = pos.length / 3;
-                        pos.push(x, y, zz);
-                        nor.push(0, 0, 1);
-                        col.push(...cc);
-                        emi.push(mt.emit);
-                        pat.push(p);
-                        aos.push(1);
-                        for (let j = 0; j < 6; j++) {
-                            pos.push(x + CX[j], y + CY[j], zz);
-                            nor.push(0, 0, 1);
-                            col.push(...cc);
-                            emi.push(mt.emit);
-                            pat.push(p);
-                            aos.push(1 - 0.28 * (occ[j] + occ[(j + 1) % 6]));
-                        }
-                        for (let j = 0; j < 6; j++) idx.push(base, base + 1 + j, base + 1 + ((j + 1) % 6));
-                    }
-                    // sides: merge runs of the same material up the column
-                    for (let i = 0; i < 6; i++) {
-                        const nq = q + DIRS[i][0];
-                        const nr = r + DIRS[i][1];
-                        if (solidAt(nq, nr, z)) continue;
-                        if (z > 0 && cells[((z - 1) * D + r) * W + c] === m && !solidAt(nq, nr, z - 1)) continue; // not the start of a run
-                        let z1 = z;
-                        while (z1 + 1 < H && cells[((z1 + 1) * D + r) * W + c] === m && !solidAt(nq, nr, z1 + 1)) z1++;
-                        // hidden under the sea floor of the world's edge
-                        const grounded = solidAt(nq, nr, z - 1);
-                        const a = (i + 5) % 6;
-                        const b = i;
-                        const sideCol = tint(mt.side && z1 === z && !solidAt(q, r, z + 1) ? mt.side : mt.color, k * 0.97);
-                        const sidePat = mt.side && !solidAt(q, r, z + 1) && z1 === z ? 8 : p;
-                        const n = [NORMALS[i][0], NORMALS[i][1], 0];
-                        const segs = [];
-                        if (grounded && z1 > z) segs.push([z, z + 1, 0.7, 1], [z + 1, z1 + 1, 1, 1]);
-                        else segs.push([z, z1 + 1, grounded ? 0.7 : 1, 1]);
-                        for (const [s0, s1, a0, a1] of segs) {
-                            const lo = s0 * LAYER;
-                            const hi = s1 * LAYER;
-                            quad([[x + CX[a], y + CY[a], lo], [x + CX[b], y + CY[b], lo], [x + CX[b], y + CY[b], hi], [x + CX[a], y + CY[a], hi]], n, sideCol, mt.emit, sidePat, [a0, a0, a1, a1]);
-                        }
-                    }
-                }
-            }
-        }
+        const { solid: o, water: w } = meshChunk(this.world, cx, cy, CH);
+        const pos = o.pos;
+        const idx = o.idx;
+        const wpos = w.pos;
+        const widx = w.idx;
         const group = new THREE.Group();
         if (idx.length) {
             const g = new THREE.BufferGeometry();
             g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-            g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-            g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-            g.setAttribute('emit', new THREE.Float32BufferAttribute(emi, 1));
-            g.setAttribute('pat', new THREE.Float32BufferAttribute(pat, 1));
-            g.setAttribute('ao', new THREE.Float32BufferAttribute(aos, 1));
+            g.setAttribute('normal', new THREE.Float32BufferAttribute(o.nor, 3));
+            g.setAttribute('color', new THREE.Float32BufferAttribute(o.col, 3));
+            g.setAttribute('emit', new THREE.Float32BufferAttribute(o.emi, 1));
+            g.setAttribute('pat', new THREE.Float32BufferAttribute(o.pat, 1));
+            g.setAttribute('ao', new THREE.Float32BufferAttribute(o.ao, 1));
             g.setIndex(pos.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
             g.computeBoundingSphere();
             group.add(new THREE.Mesh(g, this.mainMat));
@@ -787,7 +730,7 @@ export class View {
         if (widx.length) {
             const g = new THREE.BufferGeometry();
             g.setAttribute('position', new THREE.Float32BufferAttribute(wpos, 3));
-            g.setAttribute('depth', new THREE.Float32BufferAttribute(wdep, 1));
+            g.setAttribute('depth', new THREE.Float32BufferAttribute(w.dep, 1));
             g.setIndex(wpos.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(widx, 1) : new THREE.Uint16BufferAttribute(widx, 1));
             g.computeBoundingSphere();
             const m = new THREE.Mesh(g, this.waterMat);
@@ -1068,6 +1011,13 @@ export class View {
         this.partMat.uniforms.uScale.value = this.dpr * this.scale * (9 / this.zoom);
         this.pw = pw;
         this.ph = ph;
+    }
+
+    // 'paint': soft coloured lines, light hatching; 'ink': pen outlines and hatching
+    setLook(look) {
+        this.look = look;
+        this.post.material.uniforms.uInk.value = look === 'ink' ? 1 : 0;
+        this.U.uHatchK.value = look === 'ink' ? 0.42 : 0.16;
     }
 
     setScale(s) {

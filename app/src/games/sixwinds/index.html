@@ -194,7 +194,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .srow span { flex: 1; }
 .srow em { font-style: normal; font-weight: 800; color: #9a6a1a; }
 .srow.no { opacity: 0.45; }
-#map { width: 100%; height: auto; display: block; border: 2px solid var(--ink); border-radius: 8px; background: #3fb0a6; image-rendering: auto; }
+.mapwrap { max-height: min(72vh, 760px); overflow: auto; border: 2px solid var(--ink); border-radius: 8px; background: #f7f2e6; }
+#map { width: 900px; max-width: none; height: auto; display: block; }
 .pbar { height: 8px; margin-top: 3px; }
 .pbar > i { background: var(--teal); }
 .gold { color: #9a6a1a; font-weight: 800; }
@@ -304,7 +305,8 @@ body.touch #prompt kbd { display: none; }
         <h1>Шесть Ветров<small>архипелаг на шестигранной сетке</small></h1>
         <p>Море здесь — доска из базальтовых шестигранников, поднятая Шестью Ветрами. Предтечи построили шлюзы, чтобы запереть Седьмой — шторм без имени. Шлюзы текут. Ты — юнга с Солёной Пристани.</p>
         <p>Расти до класса и второго класса, рыбачь, руби, добывай руду, ныряй за обломками, мастери, выходи в море на своём шлюпе. Мир поворачивается на 60° — смотри на него со всех шести ветров.</p>
-        <div class="go"><button class="btn teal" id="newGame">Новая игра</button><button class="btn" id="contGame" hidden>Продолжить</button></div>
+        <div class="go"><button class="btn teal" id="newGame">Новая игра</button><button class="btn" id="contGame" hidden>Продолжить</button><button class="btn" id="editWorld">Редактор мира</button></div>
+        <div class="keys" id="worldName">Мир: стандартный архипелаг</div>
         <div class="keys">WASD / стрелки — идти · клик — цель, идти, говорить · Q / E — поворот мира · колесо — масштаб<br>1–8 — навыки · Tab — следующая цель · F — действие · Пробел — прыжок / подсечь рыбу<br>C персонаж · I сумка · K навыки · J задания · P профессии · M карта</div>
     </div>
 </div>

@@ -9,6 +9,7 @@ import { center, hexAt, LAYER } from './hex.js';
 import { M, MAT } from './world.js';
 import { CLASSES, SKILLS, ITEMS, NPCS, MONSTERS, ISLANDS, QUESTS } from './data.js';
 import { UI } from './ui.js';
+import { loadDoc } from './worlddoc.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -123,8 +124,10 @@ function writeSave(g) {
 
 // ------------------------------------------------------------------ the page
 export function start() {
-    const gen = generateWorld(7);
+    const doc = loadDoc();
+    let gen = generateWorld(doc ?? 7);
     const view = new View($('gl'), gen);
+    if (doc) $('worldName').textContent = `Мир: «${doc.name}» (из редактора)`;
     const ctx = { gen, view, game: null, sfx: SFX, state: 'title', keys: new Set(), stick: [0, 0], pending: null, hover: null, nums: [], labels: new Map() };
     window.sixwinds = ctx;
     ctx.ui = new UI(ctx);
@@ -137,6 +140,7 @@ export function start() {
         let s = null;
         if (fromSave) s = loadSave();
         else try { localStorage.removeItem(SAVE_KEY); } catch { /* ignore */ }
+        gen = ctx.gen ?? gen;
         ctx.game = new Game(gen, { save: s });
         ctx.state = 'play';
         $('title').hidden = true;
@@ -144,7 +148,7 @@ export function start() {
         $('stick').hidden = !touch;
         $('tbtn').hidden = !touch;
         view.azTarget = Math.round((view.az - Math.PI / 2) / (Math.PI / 3)) * (Math.PI / 3) + Math.PI / 2;
-        view.zoomTarget = touch ? 8 : 9;
+        view.zoomTarget = touch ? 6.5 : 7;
         view.snap = true;
         ctx.ui.refreshAll();
         if (!s) {
@@ -154,6 +158,13 @@ export function start() {
     };
     $('newGame').onclick = () => begin(false);
     $('contGame').onclick = () => begin(true);
+    $('editWorld').onclick = async () => {
+        ctx.state = 'editor';
+        $('title').hidden = true;
+        const m = await import('./editor.js');
+        ctx.onEditorClose = () => { if (ctx.gen !== gen) { location.reload(); return; } ctx.state = 'title'; $('title').hidden = false; };
+        await m.openEditor(ctx);
+    };
 
     // ---------------------------------------------------------- input
     const K = ctx.keys;
@@ -214,7 +225,7 @@ export function start() {
     cv.addEventListener('pointermove', (e) => {
         if (touches.has(e.pointerId)) {
             touches.set(e.pointerId, [e.clientX, e.clientY]);
-            if (touches.size === 2 && pinch) { const d = dist2(); view.zoomTarget = Math.max(5, Math.min(24, view.zoomTarget * (pinch / d))); pinch = d; }
+            if (touches.size === 2 && pinch) { const d = dist2(); view.zoomTarget = Math.max(3.5, Math.min(26, view.zoomTarget * (pinch / d))); pinch = d; }
         }
         ctx.mouse = [e.clientX, e.clientY];
     });
@@ -227,7 +238,7 @@ export function start() {
         click(e.clientX, e.clientY);
     });
     cv.addEventListener('pointercancel', endTouch);
-    cv.addEventListener('wheel', (e) => { e.preventDefault(); view.zoomTarget = Math.max(5, Math.min(24, view.zoomTarget * (e.deltaY > 0 ? 1.12 : 0.89))); }, { passive: false });
+    cv.addEventListener('wheel', (e) => { e.preventDefault(); view.zoomTarget = Math.max(3.5, Math.min(26, view.zoomTarget * (e.deltaY > 0 ? 1.12 : 0.89))); }, { passive: false });
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
 
     const click = (sx, sy) => {
@@ -624,6 +635,17 @@ export function start() {
         let dt = Math.min(0.05, (now - last) / 1000);
         last = now;
         const g = ctx.game;
+        if (ctx.state === 'editor') {
+            const f = ctx.editorFrame?.(dt);
+            if (f) {
+                view.azTarget = view.azTarget ?? view.az;
+                view.setDay(0.4);
+                view.update(dt, f);
+                view.U.uCut.value.w = 0;
+                view.render();
+            }
+            return;
+        }
         if (ctx.state === 'title' || !g) {
             // the title: drift slowly around the wharf
             const [x, y] = center(gen.start.q, gen.start.r);

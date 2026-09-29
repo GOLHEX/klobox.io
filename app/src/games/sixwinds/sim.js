@@ -6,8 +6,18 @@ import { Body, stepBody, respawn } from './physics.js';
 import { center, hexAt, LAYER, DIRS, mulberry32, disk } from './hex.js';
 import { M, MAT, nodeKey } from './world.js';
 import {
-    CLASSES, SKILLS, ITEMS, MONSTERS, monsterStats, NPCS, SHOPS, QUESTS, NODES, FISH, RECIPES, PROFS, XP_TO, POINTS_PER_LEVEL,
+    CLASSES, SKILLS, ITEMS, MONSTERS, monsterStats, NPCS, SHOPS, QUESTS, NODES, FISH, RECIPES, PROFS, XP_TO, POINTS_PER_LEVEL, ISLANDS,
 } from './data.js';
+
+// the generator adds people and errands of its own; they join the shared tables
+export function adoptWorld(gen) {
+    Object.assign(NPCS, gen.npcDefs ?? {});
+    Object.assign(QUESTS, gen.quests ?? {});
+    for (const [id, m] of Object.entries(gen.islandMeta ?? {})) {
+        if (ISLANDS[id]) continue;
+        ISLANDS[id] = { name: m.name, lvl: m.lvl ? `${m.lvl[0]}–${m.lvl[1]}` : '?', desc: '' };
+    }
+}
 
 export const INV_SIZE = 30;
 export const SAVE_KEY = 'sixwinds-save-1';
@@ -24,6 +34,7 @@ export class Game {
     constructor(gen, opts = {}) {
         this.gen = gen;
         this.w = gen.world;
+        adoptWorld(gen);
         this.rng = mulberry32(opts.seed ?? 11);
         this.ev = [];
         this.time = 0;
@@ -59,7 +70,7 @@ export class Game {
     newHero(x, y, z) {
         const quests = {};
         for (const [id, q] of Object.entries(QUESTS)) quests[id] = { state: 'locked', n: 0 };
-        for (const id of ['crabs', 'fish', 'herbs', 'ore', 'salvage']) quests[id].state = 'available';
+        for (const id of ['crabs', 'fish', 'herbs', 'ore', 'salvage', ...(this.gen.questStart ?? [])]) if (quests[id]) quests[id].state = 'available';
         const profs = {};
         for (const id of Object.keys(PROFS)) profs[id] = { lvl: 1, xp: 0, known: id === 'craft' };
         const h = {
