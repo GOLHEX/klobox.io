@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hexodus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;700;800&family=Golos+Text:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-screen one-tap game. The black hole scene fills the screen; a thin HUD
+   on top; text only on the title and game-over screens.
+   Single dark look on purpose: a lit disc of hexes around a black hole. */
+:root {
+  --space: #03040a;
+  --ink: #eef1f7;
+  --muted: #8a93ab;
+  --crystal: #bfeaff;
+  --wall: #0a0c12;
+  --rim: #8c9bc2;
+  --spike: #ff2d4b;
+  --gold: #ffc23a;
+  --disk: #ff8a3d;
+  --font-display: "Unbounded", "Golos Text", system-ui, sans-serif;
+  --font-body: "Golos Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; overflow: hidden; margin: 0; }
+[hidden] { display: none !important; }
+body { background: var(--space); color: var(--ink); font: 15px/1.5 var(--font-body); }
+.game {
+  position: fixed;
+  inset: 0;
+  background: var(--space);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+.game canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.danger {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(120% 90% at 50% 100%, rgba(255, 70, 30, 0.35), transparent 60%);
+  transition: opacity 0.3s ease;
+}
+.hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  pointer-events: none;
+}
+.score { display: grid; gap: 4px; }
+.score > b {
+  font: 800 42px/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  text-shadow: 0 0 18px rgba(191, 234, 255, 0.35);
+}
+.meta { font: 400 12px/1.3 var(--font-mono); color: var(--muted); letter-spacing: 0.05em; }
+.meta b { color: var(--ink); font-weight: 500; }
+.meta .hot { color: var(--disk); }
+.icon-btn {
+  pointer-events: auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(238, 241, 247, 0.16);
+  background: rgba(3, 4, 10, 0.55);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.icon-btn svg { width: 18px; height: 18px; }
+.icon-btn:focus-visible { outline: 2px solid var(--crystal); outline-offset: 2px; }
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  pointer-events: none;
+  background: radial-gradient(80% 60% at 50% 45%, rgba(3, 4, 10, 0.82), rgba(3, 4, 10, 0.45));
+}
+.panel { display: grid; gap: 18px; justify-items: center; text-align: center; max-width: 34ch; }
+.logo {
+  font: 800 clamp(40px, 12vw, 72px)/1 var(--font-display);
+  letter-spacing: 0.05em;
+  margin: 0;
+  background: linear-gradient(180deg, #ffffff 30%, #ffc9a3 75%, var(--disk));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 22px rgba(255, 138, 61, 0.35));
+}
+.tagline { margin: 0; font-size: 17px; text-wrap: balance; }
+.rules {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 12px;
+  text-align: left;
+  font-size: 14px;
+  color: var(--muted);
+}
+.rules i { width: 16px; height: 16px; margin-top: 2px; }
+.rules .c { background: var(--crystal); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); box-shadow: 0 0 10px var(--crystal); }
+.rules .w { background: var(--rim); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); position: relative; }
+.rules .w::after { content: ""; position: absolute; inset: 3px; background: var(--wall); clip-path: inherit; }
+.rules .s { background: var(--spike); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.rules .g { background: var(--gold); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
+.prompt {
+  font: 500 13px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 13px 20px;
+  border: 1px solid rgba(238, 241, 247, 0.28);
+  border-radius: 999px;
+  animation: breathe 2.4s ease-in-out infinite;
+}
+.fine { font: 400 11px/1.55 var(--font-mono); color: var(--muted); margin: 0; }
+.big { font: 800 64px/1 var(--font-display); margin: 0; font-variant-numeric: tabular-nums; }
+.cause { margin: 0; color: var(--muted); font-size: 16px; }
+@keyframes breathe { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .prompt { animation: none; } }
+</style>
+</head>
+<body>
+<div class="game" id="game">
+  <canvas id="view" aria-label="Чёрная дыра и кольца гексов"></canvas>
+  <div class="danger" id="danger"></div>
+
+  <div class="hud">
+    <div class="score">
+      <b id="score">0</b>
+      <span class="meta">кольцо <b id="ring">3</b> · горизонт <span id="gap">в 3 кольцах</span></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button" aria-label="Выключить звук" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path id="wave" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+    </button>
+  </div>
+
+  <div class="overlay" id="title">
+    <div class="panel">
+      <h1 class="logo">HEXODUS</h1>
+      <p class="tagline">Вырвись из чёрной дыры. Горизонт событий растёт.</p>
+      <div class="rules">
+        <i class="c"></i><span>кристалл: разбей, +1</span>
+        <i class="w"></i><span>обсидиан: отбрасывает или разворачивает орбиту</span>
+        <i class="s"></i><span>шип: смерть</span>
+        <i class="g"></i><span>золото: +3</span>
+      </div>
+      <div class="prompt">тап — толчок от дыры</div>
+      <p class="fine" id="best-title">рекорд 0</p>
+      <p class="fine">Кольца строятся алгоритмом hex ring из Red Blob Games: в кольце k ровно 6k гексов. Наклони телефон, чтобы заглянуть в воронку.</p>
+    </div>
+  </div>
+
+  <div class="overlay" id="over" hidden>
+    <div class="panel">
+      <p class="cause" id="cause">Горизонт событий догнал тебя</p>
+      <p class="big" id="final">0</p>
+      <p class="fine" id="best-over">рекорд 0</p>
+      <div class="prompt">тап — ещё раз</div>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { corners, distance, hexToPixel } from './hex.js';
+import { CELL, Run } from './game.js';
+
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = (id) => document.getElementById(id);
+const css = getComputedStyle(document.documentElement);
+const tok = (n) => new THREE.Color(css.getPropertyValue(`--${n}`).trim());
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage unavailable */ } },
+};
+let best = store.get('hexodus-bh-best', 0);
+
+// ---------------- sound ----------------
+class Sound {
+  constructor() { this.ctx = null; this.muted = store.get('hexodus-muted', false); }
+  start() {
+    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = (this.ctx = new AC());
+    this.master = ctx.createGain();
+    this.master.gain.value = this.muted ? 0 : 0.8;
+    this.master.connect(ctx.createDynamicsCompressor()).connect(ctx.destination);
+    // wet echo so the chimes ring out in the void
+    this.delay = ctx.createDelay(1);
+    this.delay.delayTime.value = 0.33;
+    const fb = ctx.createGain();
+    fb.gain.value = 0.42;
+    const wet = ctx.createGain();
+    wet.gain.value = 0.3;
+    this.delay.connect(fb).connect(this.delay);
+    this.delay.connect(wet).connect(this.master);
+    // the hole hums
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 300;
+    this.hum = ctx.createGain();
+    this.hum.gain.value = 0.08;
+    lp.connect(this.hum).connect(this.master);
+    for (const [f, type] of [[41.2, 'sine'], [61.7, 'sine'], [82.9, 'triangle'], [123.5, 'sine']]) {
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.value = f;
+      o.connect(lp);
+      o.start();
+    }
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.05;
+    const depth = ctx.createGain();
+    depth.gain.value = 160;
+    lfo.connect(depth).connect(lp.frequency);
+    lfo.start();
+  }
+  setMuted(m) {
+    this.muted = m;
+    store.set('hexodus-muted', m);
+    if (this.master) this.master.gain.setTargetAtTime(m ? 0 : 0.8, this.ctx.currentTime, 0.05);
+  }
+  danger(level) { if (this.hum) this.hum.gain.setTargetAtTime(0.08 + 0.12 * level, this.ctx.currentTime, 0.3); }
+  tone(freq, { dur = 0.5, type = 'triangle', gain = 0.14, to = null, send = true, at = 0 } = {}) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime + at;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(this.master);
+    if (send) g.connect(this.delay);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  }
+  noise(dur, from, to, gain) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const buf = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * dur), this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const f = this.ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(from, t);
+    f.frequency.exponentialRampToValueAtTime(to, t + dur);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f).connect(g).connect(this.master);
+    src.start(t);
+  }
+  crystal(combo) {
+    const steps = [0, 3, 5, 7, 10];
+    const k = combo % 15;
+    const semis = steps[k % 5] + 12 * Math.floor(k / 5);
+    this.tone(392 * 2 ** (semis / 12), { dur: 0.8, gain: 0.12 });
+    this.tone(784 * 2 ** (semis / 12), { dur: 0.25, type: 'sine', gain: 0.035, send: false });
+  }
+  gold() { this.tone(1175, { dur: 0.35, gain: 0.09 }); this.tone(1568, { dur: 0.6, gain: 0.09, at: 0.07 }); }
+  bounce(along) { this.tone(along ? 180 : 120, { dur: 0.25, type: 'sine', gain: 0.3, to: 55, send: false }); }
+  eat() { this.tone(38, { dur: 1.1, type: 'sine', gain: 0.16, send: false }); this.noise(0.8, 600, 60, 0.05); }
+  die() { this.noise(1.2, 3000, 60, 0.35); this.tone(60, { dur: 1.2, type: 'sine', gain: 0.35, to: 25, send: false }); }
+}
+const sound = new Sound();
+
+// ---------------- renderer ----------------
+const canvas = $('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.95;
+const scene = new THREE.Scene();
+scene.background = tok('space');
+scene.fog = new THREE.FogExp2(tok('space'), 0.011);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 600);
+camera.up.set(0, 0, 1);
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.7, 0.45, 0.72);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+scene.add(new THREE.AmbientLight(0x2c3658, 0.55));
+const starlight = new THREE.DirectionalLight(0x9db4ff, 0.75);
+starlight.position.set(-0.4, 0.6, 1);
+scene.add(starlight);
+const holeLight = new THREE.PointLight(0xff8a3d, 40, 0, 1.55);
+holeLight.position.set(0, 0, -1.4);
+scene.add(holeLight);
+
+// ---------------- the funnel ----------------
+const RING_SPACING = 1.6; // average world distance between hex rings
+let horizonR = 1; // world radius of the event horizon
+const funnel = (R) => -3.2 * Math.exp(-Math.max(0, R - horizonR) / 3.4);
+
+// ---------------- geometry ----------------
+function hexShape(size) {
+  const s = new THREE.Shape();
+  corners(size).forEach(([x, y], i) => (i ? s.lineTo(x, y) : s.moveTo(x, y)));
+  s.closePath();
+  return s;
+}
+const TILE_TOP = 0.3;
+const tileGeo = new THREE.ExtrudeGeometry(hexShape(0.8), { depth: 0.22, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.07, bevelSegments: 2 });
+tileGeo.translate(0, 0, -TILE_TOP);
+const wallGeo = new THREE.ExtrudeGeometry(hexShape(0.8), { depth: 0.95, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.07, bevelSegments: 2 });
+wallGeo.translate(0, 0, -TILE_TOP);
+const rimShape = hexShape(0.87);
+rimShape.holes.push(hexShape(0.66));
+const rimGeo = new THREE.ShapeGeometry(rimShape);
+rimGeo.translate(0, 0, 0.74);
+const gemGeo = new THREE.LatheGeometry([new THREE.Vector2(0, 0), new THREE.Vector2(0.46, 0.12), new THREE.Vector2(0.38, 0.4), new THREE.Vector2(0, 0.72)], 6);
+gemGeo.rotateX(Math.PI / 2);
+const spikeGeo = new THREE.ConeGeometry(0.62, 1.15, 6);
+spikeGeo.translate(0, 0.575, 0);
+spikeGeo.rotateX(Math.PI / 2);
+const coinGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.1, 6);
+coinGeo.translate(0, 0, 0.5);
+
+const mats = {
+  tile: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.55, roughness: 0.4 }),
+  wall: new THREE.MeshStandardMaterial({ color: tok('wall'), metalness: 0.9, roughness: 0.22 }),
+  rim: new THREE.MeshBasicMaterial({ color: tok('rim') }),
+  gem: new THREE.MeshStandardMaterial({ color: tok('crystal'), emissive: 0x3fb8ff, emissiveIntensity: 0.75, metalness: 0.2, roughness: 0.15, flatShading: true }),
+  spike: new THREE.MeshStandardMaterial({ color: tok('spike'), emissive: 0xff1236, emissiveIntensity: 1.2, roughness: 0.35, flatShading: true }),
+  coin: new THREE.MeshStandardMaterial({ color: tok('gold'), emissive: 0xff8a00, emissiveIntensity: 0.8, metalness: 1, roughness: 0.25, flatShading: true }),
+  debris: new THREE.MeshStandardMaterial({ color: 0x222838, emissive: 0xff5a1f, emissiveIntensity: 1.3, metalness: 0.4, roughness: 0.5 }),
+};
+
+const VIEW_MAX = 26;
+let VIEW = 14; // hexes around the ship that get drawn, set from the visible area
+const MAX = 3 * VIEW_MAX * (VIEW_MAX + 1) + 1;
+function instanced(geo, mat, count) {
+  const m = new THREE.InstancedMesh(geo, mat, count);
+  m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  m.frustumCulled = false;
+  m.count = 0;
+  scene.add(m);
+  return m;
+}
+const layers = {
+  tile: instanced(tileGeo, mats.tile, MAX),
+  wall: instanced(wallGeo, mats.wall, MAX),
+  rim: instanced(rimGeo, mats.rim, MAX),
+  gem: instanced(gemGeo, mats.gem, MAX),
+  spike: instanced(spikeGeo, mats.spike, MAX),
+  coin: instanced(coinGeo, mats.coin, 200),
+};
+layers.tile.setColorAt(0, new THREE.Color());
+
+// ---------------- black hole ----------------
+const diskMat = new THREE.ShaderMaterial({
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+  uniforms: { uTime: { value: 0 }, uRh: { value: 1 }, uOuter: { value: 8 } },
+  vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: `
+    uniform float uTime; uniform float uRh; uniform float uOuter; varying vec2 vP;
+    void main(){
+      float r = length(vP);
+      if (r < uRh) discard;
+      float a = atan(vP.y, vP.x);
+      float t = clamp((r - uRh) / (uOuter - uRh), 0.0, 1.0);
+      float profile = pow(1.0 - t, 2.4) * smoothstep(0.0, 0.05, t);
+      float lr = log(r);
+      float swirl = 0.6 + 0.3 * sin(a * 2.0 + lr * 9.0 - uTime * 2.4) + 0.2 * sin(a * 5.0 + lr * 15.0 - uTime * 3.7);
+      float doppler = 1.0 + 0.35 * sin(a + 0.8);
+      vec3 hot = mix(vec3(1.0, 0.32, 0.07), vec3(1.0, 0.86, 0.6), pow(1.0 - t, 4.0));
+      vec3 c = hot * profile * swirl * doppler * 2.6;
+      float ring = exp(-pow((r - uRh * 1.06) / (0.05 * uRh + 0.04), 2.0));
+      c += vec3(1.0, 0.9, 0.75) * ring * 2.4;
+      gl_FragColor = vec4(c, 1.0);
+    }`,
+});
+const disk = new THREE.Mesh(new THREE.PlaneGeometry(2, 2, 1, 1), diskMat);
+disk.position.z = -3.9;
+scene.add(disk);
+const horizonDisk = new THREE.Mesh(new THREE.CircleGeometry(1, 64), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+horizonDisk.position.z = -3.85;
+scene.add(horizonDisk);
+
+// stars and a faint nebula far below the disc of hexes
+{
+  const n = 2600;
+  const p = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) p.set([(Math.random() - 0.5) * 700, (Math.random() - 0.5) * 700, -40 - Math.random() * 90], i * 3);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xaab6dd, size: 0.55, transparent: true, opacity: 0.85, depthWrite: false, fog: false })));
+  const c = document.createElement('canvas');
+  c.width = c.height = 512;
+  const x = c.getContext('2d');
+  for (const [cx, cy, rad, col] of [[160, 180, 220, 'rgba(90,60,200,0.22)'], [360, 320, 260, 'rgba(255,110,60,0.12)'], [300, 120, 180, 'rgba(40,120,220,0.16)']]) {
+    const grd = x.createRadialGradient(cx, cy, 0, cx, cy, rad);
+    grd.addColorStop(0, col);
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = grd;
+    x.fillRect(0, 0, 512, 512);
+  }
+  const neb = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, fog: false }));
+  neb.position.z = -160;
+  scene.add(neb);
+}
+
+// ---------------- ship ----------------
+const ship = new THREE.Group();
+const shipCore = new THREE.Mesh(new THREE.SphereGeometry(0.2, 20, 14), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 2.9, 3.2) }));
+const shipLight = new THREE.PointLight(0x8fe8ff, 5, 6, 2);
+ship.add(shipCore, shipLight);
+scene.add(ship);
+const TRAIL = 70;
+const trailPos = new Float32Array(TRAIL * 3);
+const trailCol = new Float32Array(TRAIL * 3);
+const trailGeo = new THREE.BufferGeometry();
+trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
+trailGeo.setAttribute('color', new THREE.BufferAttribute(trailCol, 3));
+const trail = new THREE.Points(trailGeo, new THREE.PointsMaterial({ size: 0.26, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+trail.frustumCulled = false;
+scene.add(trail);
+
+// shards (crystals, deaths) fall into the hole
+const SHARDS = 700;
+const sPos = new Float32Array(SHARDS * 3);
+const sCol = new Float32Array(SHARDS * 3);
+const sVel = new Float32Array(SHARDS * 3);
+const sTint = new Float32Array(SHARDS * 3);
+const sLife = new Float32Array(SHARDS);
+const shardGeo = new THREE.BufferGeometry();
+shardGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
+shardGeo.setAttribute('color', new THREE.BufferAttribute(sCol, 3));
+const shards = new THREE.Points(shardGeo, new THREE.PointsMaterial({ size: 0.2, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+shards.frustumCulled = false;
+scene.add(shards);
+let sNext = 0;
+function burst(x, y, z, color, count, speed) {
+  const n = reduceMotion ? Math.ceil(count / 3) : count;
+  for (let i = 0; i < n; i++) {
+    const k = sNext++ % SHARDS;
+    sPos.set([x, y, z], k * 3);
+    const a = Math.random() * Math.PI * 2;
+    const up = Math.random();
+    const v = speed * (0.4 + Math.random());
+    sVel.set([Math.cos(a) * v, Math.sin(a) * v, up * v * 1.4], k * 3);
+    sTint.set([color.r * 2, color.g * 2, color.b * 2], k * 3);
+    sLife[k] = 0.7 + Math.random() * 0.8;
+  }
+}
+function updateShards(dt) {
+  for (let k = 0; k < SHARDS; k++) {
+    if (sLife[k] <= 0) { sCol[k * 3] = sCol[k * 3 + 1] = sCol[k * 3 + 2] = 0; continue; }
+    sLife[k] -= dt;
+    const x = sPos[k * 3], y = sPos[k * 3 + 1];
+    const r2 = x * x + y * y + 1;
+    // pulled toward the hole, a little swirl
+    sVel[k * 3] += (-x / r2) * 30 * dt + (y / r2) * 8 * dt;
+    sVel[k * 3 + 1] += (-y / r2) * 30 * dt - (x / r2) * 8 * dt;
+    sVel[k * 3 + 2] -= 6 * dt;
+    for (let j = 0; j < 3; j++) {
+      sVel[k * 3 + j] *= 1 - 1.2 * dt;
+      sPos[k * 3 + j] += sVel[k * 3 + j] * dt;
+      sCol[k * 3 + j] = sTint[k * 3 + j] * Math.min(1, sLife[k]);
+    }
+  }
+  shardGeo.attributes.position.needsUpdate = true;
+  shardGeo.attributes.color.needsUpdate = true;
+}
+
+// debris: tiles of eaten rings spiral into the hole
+const DEBRIS = 500;
+const debrisMesh = new THREE.InstancedMesh(tileGeo, mats.debris, DEBRIS);
+debrisMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+debrisMesh.frustumCulled = false;
+scene.add(debrisMesh);
+const debris = [];
+function swallowRing(k) {
+  const view = VIEW + 4;
+  for (const [q, r] of ringNear(k, view)) {
+    if (debris.length >= DEBRIS) break;
+    const [x, y] = hexToPixel(q, r);
+    debris.push({ a: Math.atan2(y, x), R: Math.hypot(x, y), z: funnel(Math.hypot(x, y)), spin: Math.random() * 6, life: 1.6 + Math.random() * 0.6 });
+  }
+}
+function ringNear(k, view) {
+  const out = [];
+  const [cq, cr] = run.cell;
+  for (let dq = -view; dq <= view; dq++) {
+    for (let dr = Math.max(-view, -dq - view); dr <= Math.min(view, -dq + view); dr++) {
+      if (distance(cq + dq, cr + dr) === k) out.push([cq + dq, cr + dr]);
+    }
+  }
+  return out;
+}
+const o = new THREE.Object3D();
+function updateDebris(dt) {
+  let n = 0;
+  for (let i = debris.length - 1; i >= 0; i--) {
+    const d = debris[i];
+    d.life -= dt;
+    if (d.life <= 0 || d.R < 0.3) { debris.splice(i, 1); continue; }
+    d.R *= 1 - 1.1 * dt;
+    d.a += (run ? run.dir : -1) * (2.2 / Math.max(d.R, 0.5)) * dt;
+    d.z -= 2.2 * dt;
+    d.spin += dt * 4;
+    const s = Math.min(1, d.life) * 0.9;
+    o.position.set(d.R * Math.cos(d.a), d.R * Math.sin(d.a), d.z);
+    o.rotation.set(d.spin * 0.7, d.spin * 0.4, d.a);
+    o.scale.set(s * 1.4, s * 0.55, s);
+    o.updateMatrix();
+    debrisMesh.setMatrixAt(n++, o.matrix);
+  }
+  debrisMesh.count = n;
+  debrisMesh.instanceMatrix.needsUpdate = true;
+}
+
+// shockwave rings when a crystal breaks
+const waves = Array.from({ length: 10 }, () => {
+  const s = hexShape(1);
+  s.holes.push(hexShape(0.9));
+  const m = new THREE.Mesh(new THREE.ShapeGeometry(s), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 2.2, 2.6), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+  m.userData.life = 0;
+  scene.add(m);
+  return m;
+});
+let waveNext = 0;
+function wave(x, y, z, color) {
+  const m = waves[waveNext++ % waves.length];
+  m.position.set(x, y, z + 0.05);
+  m.material.color.copy(color).multiplyScalar(2);
+  m.userData.life = 1;
+}
+function updateWaves(dt) {
+  for (const m of waves) {
+    if (m.userData.life <= 0) { m.visible = false; continue; }
+    m.visible = true;
+    m.userData.life -= dt * 2.4;
+    const t = 1 - m.userData.life;
+    m.scale.setScalar(0.8 + t * 1.8);
+    m.material.opacity = Math.max(0, m.userData.life);
+  }
+}
+
+// ---------------- world drawing ----------------
+const tint = new THREE.Color();
+const baseA = new THREE.Color(0x141a29);
+const baseB = new THREE.Color(0x1f2740);
+const hot = new THREE.Color(0xff6a2a);
+const current = new THREE.Color(0x34466e);
+let time = 0;
+
+function drawWorld() {
+  const [cq, cr] = run.cell;
+  const shipRing = run.ringIndex;
+  const counts = { tile: 0, wall: 0, rim: 0, gem: 0, spike: 0, coin: 0 };
+  const put = (layer, x, y, z, rot = 0, sx = 1, sy = 1, sz = 1) => {
+    o.position.set(x, y, z);
+    o.rotation.set(0, 0, rot);
+    o.scale.set(sx, sy, sz);
+    o.updateMatrix();
+    layers[layer].setMatrixAt(counts[layer]++, o.matrix);
+  };
+  for (let dq = -VIEW; dq <= VIEW; dq++) {
+    for (let dr = Math.max(-VIEW, -dq - VIEW); dr <= Math.min(VIEW, -dq + VIEW); dr++) {
+      const q = cq + dq;
+      const r = cr + dr;
+      const k = distance(q, r);
+      if (k <= run.eaten) continue;
+      const [x, y] = hexToPixel(q, r);
+      const R = Math.hypot(x, y);
+      const z = funnel(R);
+      const type = run.typeAt(q, r);
+      if (type === CELL.WALL) {
+        put('wall', x, y, z);
+        put('rim', x, y, z);
+        continue;
+      }
+      // alternate ring shades so rings read at a glance; the ship's ring is lit; the edge glows
+      tint.copy(k % 2 ? baseA : baseB);
+      if (k === shipRing) tint.lerp(current, 0.8);
+      const heat = Math.max(0, 1 - (k - run.horizon) / 2.5);
+      if (heat > 0) tint.lerp(hot, heat * 0.7);
+      layers.tile.setColorAt(counts.tile, tint);
+      put('tile', x, y, z);
+      if (type === CELL.CRYSTAL) put('gem', x, y, z, time * 0.8 + q, 1, 1, 1 + 0.06 * Math.sin(time * 3 + r));
+      else if (type === CELL.SPIKE) put('spike', x, y, z, 0, 1, 1, 1 + 0.12 * Math.sin(time * 6 + q * 1.3));
+      else if (type === CELL.GOLD) put('coin', x, y, z, time * 2.5 + q);
+    }
+  }
+  for (const [name, m] of Object.entries(layers)) {
+    m.count = counts[name];
+    m.instanceMatrix.needsUpdate = true;
+  }
+  if (layers.tile.instanceColor) layers.tile.instanceColor.needsUpdate = true;
+}
+
+// ---------------- camera ----------------
+const camU = new THREE.Vector3(1, 0, 0);
+const camPos = new THREE.Vector3();
+const tilt = { x: 0, y: 0, tx: 0, ty: 0, base: null };
+let shake = 0;
+function placeCamera(dt, snap = false) {
+  const R = Math.hypot(run.x, run.y);
+  const u = new THREE.Vector3(run.x / R, run.y / R, 0);
+  if (snap) camU.copy(u);
+  else camU.lerp(u, 1 - Math.exp(-dt * 5)).normalize();
+  const side = new THREE.Vector3(-camU.y, camU.x, 0);
+  const tanHalf = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  // same tile size on every screen: about 16 units across the shorter side
+  const ppu = Math.max(22, Math.min(34, Math.min(innerWidth, innerHeight) / 16));
+  const spanUp = innerHeight / ppu;
+  const dist = spanUp / (2 * tanHalf);
+  VIEW = Math.min(VIEW_MAX, Math.ceil(Math.max(innerWidth, innerHeight) / ppu / 2.6) + 4);
+  scene.fog.density = 0.3 / dist;
+  const shipZ = funnel(R);
+  const target = new THREE.Vector3(run.x, run.y, shipZ).addScaledVector(camU, spanUp * 0.16);
+  tilt.x += (tilt.tx - tilt.x) * Math.min(1, dt * 6);
+  tilt.y += (tilt.ty - tilt.y) * Math.min(1, dt * 6);
+  const offset = new THREE.Vector3().addScaledVector(camU, -0.28).add(new THREE.Vector3(0, 0, 1)).normalize().multiplyScalar(dist);
+  offset.addScaledVector(side, tilt.x * dist * 0.22).addScaledVector(camU, -tilt.y * dist * 0.18);
+  const want = target.clone().add(offset);
+  if (snap) camPos.copy(want);
+  else camPos.lerp(want, 1 - Math.exp(-dt * 8));
+  camera.position.copy(camPos);
+  if (shake > 0 && !reduceMotion) camera.position.add(new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, 0).multiplyScalar(shake * 0.5));
+  shake = Math.max(0, shake - dt * 2.5);
+  camera.up.copy(camU);
+  camera.lookAt(target);
+}
+
+// ---------------- game flow ----------------
+let run = null;
+let state = 'title'; // title | play | dead
+let deadAt = 0;
+let combo = 0;
+let lastBreak = -9;
+const WHITE = new THREE.Color(0xbfeaff);
+const RED = tok('spike');
+const GOLD = tok('gold');
+const DISK = tok('disk');
+
+function newRun() {
+  run = new Run({ seed: (Math.random() * 1e9) | 0 });
+  debris.length = 0;
+  for (let i = 0; i < TRAIL; i++) trailPos.set([run.x, run.y, funnel(Math.hypot(run.x, run.y)) + 0.6], i * 3);
+  placeCamera(0, true);
+  hud();
+}
+
+function hud() {
+  $('score').textContent = String(run.score);
+  $('ring').textContent = String(run.ringIndex);
+  const gap = Math.max(0, run.ringIndex - run.eaten - 1);
+  const word = gap === 1 ? 'кольце' : 'кольцах';
+  $('gap').textContent = `в ${gap} ${word}`;
+  $('gap').className = gap <= 2 ? 'hot' : '';
+  const danger = Math.max(0, 1 - (run.ringIndex - run.horizon) / 3);
+  $('danger').style.opacity = state === 'play' ? String(danger) : '0';
+  sound.danger(state === 'play' ? danger : 0);
+  $('best-title').textContent = `рекорд ${best}`;
+  $('best-over').textContent = `рекорд ${best} · колец пройдено ${run.maxRing}`;
+}
+
+function show(id) {
+  for (const x of ['title', 'over']) $(x).hidden = x !== id;
+}
+
+async function enableTilt() {
+  try {
+    const DOE = window.DeviceOrientationEvent;
+    if (DOE && typeof DOE.requestPermission === 'function' && (await DOE.requestPermission()) !== 'granted') return;
+    addEventListener('deviceorientation', (e) => {
+      if (e.gamma == null || e.beta == null) return;
+      if (tilt.base === null) tilt.base = e.beta;
+      tilt.tx = Math.max(-1, Math.min(1, e.gamma / 25));
+      tilt.ty = Math.max(-1, Math.min(1, (e.beta - tilt.base) / 25));
+    });
+  } catch { /* no gyroscope here: parallax follows the pointer instead */ }
+}
+let tiltAsked = false;
+addEventListener('pointermove', (e) => {
+  if (e.pointerType !== 'mouse') return;
+  tilt.tx = (e.clientX / innerWidth - 0.5) * 0.8;
+  tilt.ty = (e.clientY / innerHeight - 0.5) * 0.8;
+});
+
+function tap() {
+  sound.start();
+  if (!tiltAsked) { tiltAsked = true; enableTilt(); }
+  if (state === 'title') {
+    state = 'play';
+    show(null);
+    run.tap();
+  } else if (state === 'play') {
+    run.tap();
+  } else if (state === 'dead' && performance.now() - deadAt > 700) {
+    newRun();
+    state = 'play';
+    show(null);
+    run.tap();
+  }
+}
+$('game').addEventListener('pointerdown', (e) => {
+  if (e.target.closest('button')) return;
+  e.preventDefault();
+  tap();
+});
+addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  if (['Space', 'ArrowUp', 'KeyW'].includes(e.code)) {
+    e.preventDefault();
+    tap();
+  }
+});
+$('mute').addEventListener('click', () => {
+  sound.start();
+  sound.setMuted(!sound.muted);
+  syncMute();
+  $('mute').blur();
+});
+function syncMute() {
+  $('mute').setAttribute('aria-pressed', String(sound.muted));
+  $('mute').setAttribute('aria-label', sound.muted ? 'Включить звук' : 'Выключить звук');
+  $('wave').style.opacity = sound.muted ? '0.15' : '1';
+}
+syncMute();
+
+function cellTop(q, r) {
+  const [x, y] = hexToPixel(q, r);
+  return [x, y, funnel(Math.hypot(x, y))];
+}
+
+function handle(events) {
+  for (const e of events) {
+    if (e.type === 'break') {
+      combo = run.t - lastBreak < 1.3 ? combo + 1 : 0;
+      lastBreak = run.t;
+      const [x, y, z] = cellTop(e.q, e.r);
+      burst(x, y, z + 0.4, WHITE, 16, 4);
+      wave(x, y, z, WHITE);
+      sound.crystal(combo);
+    } else if (e.type === 'gold') {
+      const [x, y, z] = cellTop(e.q, e.r);
+      burst(x, y, z + 0.4, GOLD, 26, 5);
+      wave(x, y, z, GOLD);
+      sound.gold();
+    } else if (e.type === 'bounce') {
+      const [x, y, z] = cellTop(e.q, e.r);
+      burst(x, y, z + 0.8, new THREE.Color(0.55, 0.62, 0.8), 8, 2.5);
+      shake = 0.5;
+      sound.bounce(e.along);
+    } else if (e.type === 'eat') {
+      swallowRing(e.ring);
+      shake = Math.max(shake, 0.35);
+      sound.eat();
+    } else if (e.type === 'die') {
+      state = 'dead';
+      deadAt = performance.now();
+      burst(ship.position.x, ship.position.y, ship.position.z, e.cause === 'spike' ? RED : DISK, 90, 7);
+      shake = 1.6;
+      sound.die();
+      if (run.score > best) { best = run.score; store.set('hexodus-bh-best', best); }
+      $('cause').textContent = e.cause === 'spike' ? 'Разбит о шип' : 'Горизонт событий догнал тебя';
+      $('final').textContent = String(run.score);
+      setTimeout(() => { if (state === 'dead') show('over'); }, 700);
+    }
+  }
+  hud();
+}
+
+// ---------------- loop ----------------
+const STEP = 1 / 120;
+let acc = 0;
+let last = performance.now();
+let hudTimer = 0;
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  time += dt;
+  if (state === 'play') {
+    acc += dt;
+    while (acc >= STEP && state === 'play') {
+      acc -= STEP;
+      const ev = run.update(STEP, []);
+      if (ev.length) handle(ev);
+    }
+    if ((hudTimer += dt) > 0.1) { hudTimer = 0; hud(); }
+  } else {
+    acc = 0;
+  }
+
+  horizonR += (Math.max(0.9, (run.horizon + 0.2) * RING_SPACING) - horizonR) * Math.min(1, dt * 3);
+  const outer = horizonR * 2.6 + 5;
+  disk.scale.setScalar(outer);
+  diskMat.uniforms.uRh.value = horizonR;
+  diskMat.uniforms.uOuter.value = outer;
+  diskMat.uniforms.uTime.value = time;
+  horizonDisk.scale.setScalar(horizonR * 1.01);
+  holeLight.intensity = 40 * (1 + run.eaten * 0.12);
+  mats.spike.emissiveIntensity = 1.5 + 0.4 * Math.sin(time * 6);
+
+  const R = Math.hypot(run.x, run.y);
+  const hover = state === 'title' ? 0.15 * Math.sin(time * 2.2) : 0;
+  ship.position.set(run.x, run.y, funnel(R) + 0.62 + hover);
+  ship.visible = state !== 'dead';
+  trailPos.copyWithin(3, 0, (TRAIL - 1) * 3);
+  trailPos.set([ship.position.x, ship.position.y, ship.position.z], 0);
+  for (let i = 0; i < TRAIL; i++) {
+    const a = state === 'dead' ? 0 : (1 - i / TRAIL) ** 1.8 * 1.6;
+    trailCol.set([0.45 * a, 0.85 * a, 1.0 * a], i * 3);
+  }
+  trailGeo.attributes.position.needsUpdate = true;
+  trailGeo.attributes.color.needsUpdate = true;
+
+  drawWorld();
+  updateDebris(dt);
+  updateShards(dt);
+  updateWaves(dt);
+  placeCamera(dt);
+  composer.render();
+  requestAnimationFrame(frame);
+}
+
+function resize() {
+  const w = innerWidth;
+  const h = innerHeight;
+  renderer.setSize(w, h, false);
+  composer.setSize(w, h);
+  bloom.resolution.set(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+
+resize();
+newRun();
+show('title');
+hud();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
