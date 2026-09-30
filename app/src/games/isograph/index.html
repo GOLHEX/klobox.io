@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Изограф</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a sheet of isometric graph paper with the level drawn in ink, a narrow
+   side column of controls and the principle sketch. Single paper look on purpose. */
+:root {
+  --paper: #f6f8fa;
+  --sheet: #fbfcfd;
+  --grid: #a6d6e8;
+  --ink: #16181d;
+  --ink-2: #555a64;
+  --red: #c8412c;
+  --line: #d6dee5;
+  --font-hand: "Caveat", "Segoe Print", "Bradley Hand", cursive;
+  --font-body: "Golos Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+html, body { height: 100%; margin: 0; }
+[hidden] { display: none !important; }
+body { background: var(--paper); color: var(--ink); font: 14px/1.5 var(--font-body); }
+.app {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 300px);
+  gap: 16px;
+  height: 100%;
+  box-sizing: border-box;
+  padding-block: 16px;
+  padding-inline: 16px;
+}
+.sheet {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: var(--sheet);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03), 0 8px 24px rgba(40, 60, 80, 0.06);
+  overflow: hidden;
+}
+.sheet canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: manipulation; }
+.stamp {
+  position: absolute;
+  left: 14px;
+  top: 10px;
+  font: 700 30px/1 var(--font-hand);
+  color: var(--ink);
+  pointer-events: none;
+}
+.stamp small { display: block; font: 500 17px/1.2 var(--font-hand); color: var(--ink-2); margin-top: 2px; }
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  font: 500 20px/1 var(--font-hand);
+  color: var(--red);
+  pointer-events: none;
+}
+.side { display: flex; flex-direction: column; gap: 16px; min-width: 0; overflow-y: auto; }
+.side h2 { margin: 0; font: 700 26px/1.1 var(--font-hand); }
+.side p { margin: 0; color: var(--ink-2); }
+.group { display: grid; gap: 7px; }
+.label { font: 500 11px/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-2); }
+.seg { display: flex; border: 1px solid var(--ink); border-radius: 4px; overflow: hidden; }
+.seg button {
+  flex: 1;
+  border: 0;
+  border-right: 1px solid var(--ink);
+  background: var(--sheet);
+  color: var(--ink);
+  font: 500 13px/1 var(--font-body);
+  padding: 9px 6px;
+  cursor: pointer;
+}
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--sheet); }
+.row { display: flex; gap: 8px; }
+.btn {
+  flex: 1;
+  border: 1.5px solid var(--ink);
+  background: var(--ink);
+  color: var(--sheet);
+  font: 600 14px/1 var(--font-body);
+  padding: 11px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.seed { display: flex; align-items: center; gap: 6px; border: 1px solid var(--ink); border-radius: 4px; padding: 0 8px; background: var(--sheet); }
+.seed span { font: 500 12px/1 var(--font-mono); color: var(--ink-2); }
+.seed input { width: 100%; min-width: 0; border: 0; background: transparent; font: 500 14px/1 var(--font-mono); padding: 10px 0; color: var(--ink); }
+.checks { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.checks label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.checks input { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+.stats { font: 400 12px/1.6 var(--font-mono); color: var(--ink-2); }
+.stats b { color: var(--ink); font-weight: 500; }
+.principle { border-top: 1px dashed var(--ink-2); padding-top: 12px; display: grid; gap: 8px; }
+.principle canvas { width: 100%; height: 150px; display: block; }
+.principle ol { margin: 0; padding-left: 18px; color: var(--ink-2); display: grid; gap: 4px; font-size: 13px; }
+@media (max-width: 820px) {
+  html, body { height: auto; }
+  .app { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .sheet { height: min(72vh, 118vw); min-height: 380px; }
+  .side { overflow: visible; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <main class="sheet">
+    <canvas id="view" aria-label="Уровень, нарисованный тушью на изометрической бумаге"></canvas>
+    <div class="stamp" id="stamp">Изограф<small>лист №1 · 3 этажа</small></div>
+    <div class="toast" id="toast" hidden></div>
+  </main>
+  <aside class="side">
+    <div class="group">
+      <h2>Генератор уровней</h2>
+      <p>Воксельный мир, нарисованный на треугольной сетке. Этажи связаны лестницами, без порталов. Клик по полу — путник идёт туда.</p>
+    </div>
+    <div class="row">
+      <button class="btn" id="reroll" type="button">Новый уровень</button>
+      <label class="seed" for="seed"><span>сид</span><input id="seed" type="number" min="1" inputmode="numeric"></label>
+    </div>
+    <div class="group">
+      <div class="label" id="l-storeys">Этажей</div>
+      <div class="seg" role="group" aria-labelledby="l-storeys" id="storeys"></div>
+    </div>
+    <div class="group">
+      <div class="label" id="l-size">Размер</div>
+      <div class="seg" role="group" aria-labelledby="l-size" id="size"></div>
+    </div>
+    <div class="group">
+      <div class="label" id="l-style">Подача</div>
+      <div class="seg" role="group" aria-labelledby="l-style" id="style">
+        <button type="button" data-v="ink" aria-pressed="true">Тушь</button>
+        <button type="button" data-v="color" aria-pressed="false">Акварель</button>
+      </div>
+    </div>
+    <div class="checks">
+      <label for="c-route"><input id="c-route" type="checkbox" checked> маршрут</label>
+      <label for="c-walker"><input id="c-walker" type="checkbox" checked> путник</label>
+      <label for="c-grid"><input id="c-grid" type="checkbox" checked> сетка</label>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="principle">
+      <div class="label">Принцип</div>
+      <canvas id="principle" aria-label="Куб на изометрической сетке — шестиугольник из шести треугольников"></canvas>
+      <ol>
+        <li>Треугольная сетка — проекция кубической вдоль диагонали (1,1,1).</li>
+        <li>Куб = шестиугольник из 6 треугольников, грань = ромб из 2.</li>
+        <li>(x,y,z) и (x+1,y+1,z+1) попадают в одно место, поэтому уровень хранится в 3D, а рисуется по сумме x+y+z.</li>
+      </ol>
+    </div>
+  </aside>
+</div>
+
+<script type="module">
+import { MAT, generate, k3 } from './generator.js';
+
+const $ = (id) => document.getElementById(id);
+const COS30 = Math.sqrt(3) / 2;
+const view = { S: 28, OX: 0, OY: 0, dpr: 1, w: 0, h: 0 };
+const P = (x, y, z) => [view.OX + (x - y) * COS30 * view.S, view.OY + (x + y) * 0.5 * view.S - z * view.S];
+const css = getComputedStyle(document.documentElement);
+const tok = (n) => css.getPropertyValue(`--${n}`).trim();
+const INK = tok('ink');
+const INK2 = tok('ink-2');
+const RED = tok('red');
+const GRID = tok('grid');
+const SHEET = tok('sheet');
+
+const settings = { seed: 1 + Math.floor(Math.random() * 9999), storeys: 3, size: 16, style: 'ink', route: true, walker: true, grid: true };
+let level = null;
+let items = [];
+
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const hashCell = (x, y, z, f = 0) => (Math.imul(x + 17, 73856093) ^ Math.imul(y + 31, 19349663) ^ Math.imul(z + 7, 83492791) ^ Math.imul(f + 3, 2654435761)) >>> 0;
+
+// ---------------- washes ----------------
+const WASH = {
+  ink: { top: '#fdfdfb', left: '#e8ebef', right: '#cdd2da' },
+  color: {
+    [MAT.EARTH]: { top: '#e3ecc6', left: '#e3d7c0', right: '#cbb799' },
+    [MAT.ROCK]: { top: '#ece8e1', left: '#dbd5cb', right: '#c0b8ac' },
+    [MAT.STONE]: { top: '#f2efea', left: '#dfdad2', right: '#c7c1b7' },
+    [MAT.WOOD]: { top: '#f3e3c3', left: '#e2cba2', right: '#c8a97c' },
+    [MAT.BRICK]: { top: '#efe8e2', left: '#ddd2c7', right: '#c3b6a9' },
+  },
+};
+const wash = (m, f) => (settings.style === 'ink' ? WASH.ink[f] : WASH.color[m][f]);
+const lw = () => view.S / 28;
+
+// ---------------- drawing primitives ----------------
+function poly(ctx, pts) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+}
+function line(ctx, a, b, width, color = INK) {
+  ctx.lineWidth = width;
+  ctx.strokeStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(a[0], a[1]);
+  ctx.lineTo(b[0], b[1]);
+  ctx.stroke();
+}
+// point on a parallelogram face: pts[0] + u (pts[1] - pts[0]) + v (pts[3] - pts[0])
+const at = (pts, u, v) => [
+  pts[0][0] + u * (pts[1][0] - pts[0][0]) + v * (pts[3][0] - pts[0][0]),
+  pts[0][1] + u * (pts[1][1] - pts[0][1]) + v * (pts[3][1] - pts[0][1]),
+];
+function stipple(ctx, pts, R, n, color = INK2) {
+  ctx.fillStyle = color;
+  const d = Math.max(1, lw() * 1.1);
+  for (let i = 0; i < n; i++) {
+    const [x, y] = at(pts, R(), R());
+    ctx.fillRect(x, y, d, d);
+  }
+}
+// Shading and texture per material and face, in face coordinates.
+function pattern(ctx, pts, m, face, R) {
+  const w = lw();
+  const thin = (u0, v0, u1, v1) => line(ctx, at(pts, u0, v0), at(pts, u1, v1), 0.8 * w, INK2);
+  if (face === 'top') {
+    if (m === MAT.EARTH) {
+      stipple(ctx, pts, R, 4);
+      if (R() < 0.35) for (let i = 0; i < 3; i++) { const u = R(), v = R(); const [x, y] = at(pts, u, v); line(ctx, [x, y], [x + (R() - 0.5) * 3 * w, y - (3 + R() * 4) * w], 0.8 * w, INK2); }
+    } else if (m === MAT.WOOD) {
+      for (const v of [0.25, 0.5, 0.75]) thin(0.02, v, 0.98, v);
+      if (R() < 0.5) stipple(ctx, pts, R, 2);
+    } else if (m === MAT.ROCK) {
+      stipple(ctx, pts, R, 7);
+      if (R() < 0.3) thin(R(), R(), R(), R());
+    } else {
+      stipple(ctx, pts, R, 3);
+    }
+    return;
+  }
+  const dark = face === 'right';
+  if (m === MAT.BRICK) {
+    for (const v of [1 / 3, 2 / 3]) thin(0, v, 1, v);
+    for (const [v0, v1, us] of [[0, 1 / 3, [0.5]], [1 / 3, 2 / 3, [0.25, 0.75]], [2 / 3, 1, [0.5]]]) for (const u of us) thin(u, v0, u, v1);
+    stipple(ctx, pts, R, dark ? 8 : 3);
+  } else if (m === MAT.WOOD) {
+    thin(0, 0.5, 1, 0.5);
+    stipple(ctx, pts, R, dark ? 6 : 2);
+  } else if (m === MAT.STONE) {
+    thin(0, 0.5, 1, 0.5);
+    thin(0.5 + (R() - 0.5) * 0.3, 0.5, 0.5 + (R() - 0.5) * 0.3, 1);
+    stipple(ctx, pts, R, dark ? 10 : 4);
+  } else {
+    // earth and rock cliffs: vertical hatching hanging from the top edge
+    const n = dark ? 6 : 3;
+    for (let i = 0; i < n; i++) { const u = (i + 0.5 + (R() - 0.5) * 0.6) / n; thin(u, 1, u, 1 - (0.25 + R() * 0.5)); }
+    stipple(ctx, pts, R, dark ? 14 : 6);
+  }
+}
+function face(ctx, pts, m, f, edges, seed, skipThin) {
+  poly(ctx, pts);
+  ctx.fillStyle = wash(m, f);
+  ctx.fill();
+  ctx.save();
+  poly(ctx, pts);
+  ctx.clip();
+  pattern(ctx, pts, m, f, rng(seed));
+  ctx.restore();
+  const w = lw();
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 4; i++) {
+    if (!edges[i] && skipThin) continue;
+    line(ctx, pts[i], pts[(i + 1) % 4], edges[i] ? 1.9 * w : 0.8 * w, edges[i] ? INK : INK2);
+  }
+}
+// An axis-aligned box drawn as 3 faces (used for steps and furniture).
+function box(ctx, x0, y0, z0, x1, y1, z1, m, seed, width = 1.4) {
+  const w = lw() * width;
+  const faces = [
+    ['left', [P(x0, y1, z0), P(x1, y1, z0), P(x1, y1, z1), P(x0, y1, z1)]],
+    ['right', [P(x1, y0, z0), P(x1, y1, z0), P(x1, y1, z1), P(x1, y0, z1)]],
+    ['top', [P(x0, y0, z1), P(x1, y0, z1), P(x1, y1, z1), P(x0, y1, z1)]],
+  ];
+  const R = rng(seed);
+  for (const [f, pts] of faces) {
+    poly(ctx, pts);
+    ctx.fillStyle = wash(m, f);
+    ctx.fill();
+    ctx.save(); poly(ctx, pts); ctx.clip(); stipple(ctx, pts, R, f === 'right' ? 5 : 1); ctx.restore();
+    ctx.lineWidth = w;
+    ctx.strokeStyle = INK;
+    ctx.lineJoin = 'round';
+    poly(ctx, pts);
+    ctx.stroke();
+  }
+  return faces;
+}
+
+// ---------------- scene items ----------------
+function buildItems() {
+  const L = level;
+  const list = [];
+  const solid = (x, y, z) => L.solid(x, y, z);
+  const mat = (x, y, z) => L.get(x, y, z);
+  const topVis = (x, y, z, m) => solid(x, y, z) && !solid(x, y, z + 1) && mat(x, y, z) === m;
+  const rightVis = (x, y, z, m) => solid(x, y, z) && !solid(x + 1, y, z) && mat(x, y, z) === m;
+  const leftVis = (x, y, z, m) => solid(x, y, z) && !solid(x, y + 1, z) && mat(x, y, z) === m;
+  const continuous = (m) => m === MAT.EARTH || m === MAT.ROCK || m === MAT.WOOD;
+
+  for (let z = 0; z < L.H; z++) {
+    for (let y = 0; y < L.D; y++) {
+      for (let x = 0; x < L.W; x++) {
+        const m = mat(x, y, z);
+        if (m === MAT.AIR || m === MAT.STAIR) continue;
+        const top = !solid(x, y, z + 1);
+        const right = !solid(x + 1, y, z);
+        const left = !solid(x, y + 1, z);
+        if (!top && !right && !left) continue;
+        list.push({
+          key: x + y + z,
+          draw(ctx) {
+            if (left) {
+              const pts = [P(x, y + 1, z), P(x + 1, y + 1, z), P(x + 1, y + 1, z + 1), P(x, y + 1, z + 1)];
+              const e = [!leftVis(x, y, z - 1, m), !leftVis(x + 1, y, z, m), !leftVis(x, y, z + 1, m), !leftVis(x - 1, y, z, m)];
+              face(ctx, pts, m, 'left', e, hashCell(x, y, z, 1), continuous(m));
+            }
+            if (right) {
+              const pts = [P(x + 1, y, z), P(x + 1, y + 1, z), P(x + 1, y + 1, z + 1), P(x + 1, y, z + 1)];
+              const e = [!rightVis(x, y, z - 1, m), !rightVis(x, y + 1, z, m), !rightVis(x, y, z + 1, m), !rightVis(x, y - 1, z, m)];
+              face(ctx, pts, m, 'right', e, hashCell(x, y, z, 2), continuous(m));
+            }
+            if (top) {
+              const pts = [P(x, y, z + 1), P(x + 1, y, z + 1), P(x + 1, y + 1, z + 1), P(x, y + 1, z + 1)];
+              const e = [!topVis(x, y - 1, z, m), !topVis(x + 1, y, z, m), !topVis(x, y + 1, z, m), !topVis(x - 1, y, z, m)];
+              face(ctx, pts, m, 'top', e, hashCell(x, y, z, 3), continuous(m));
+            }
+          },
+        });
+      }
+    }
+  }
+
+  // stairs: four steps per voxel, rising toward the back
+  for (const [key, rise] of L.stairs) {
+    const x = key % 1024;
+    const y = Math.floor(key / 1024) % 1024;
+    const z = Math.floor(key / 1048576);
+    list.push({
+      key: x + y + z - 0.5,
+      draw(ctx) {
+        for (let j = 0; j < 4; j++) {
+          const top = z + (4 - j) / 4;
+          if (rise[0] === -1) box(ctx, x + j / 4, y, z, x + (j + 1) / 4, y + 1, top, MAT.STONE, hashCell(x, y, z, j));
+          else box(ctx, x, y + j / 4, z, x + 1, y + (j + 1) / 4, top, MAT.STONE, hashCell(x, y, z, j));
+        }
+      },
+    });
+  }
+
+  for (const p of L.props) {
+    const wall = p.kind === 'window' || p.kind === 'torch';
+    list.push({ key: p.x + p.y + p.z + (wall ? 0.5 : 0.3), draw: (ctx) => PROPS[p.kind](ctx, p) });
+  }
+
+  if (settings.route && L.route) {
+    const r = L.route;
+    for (let i = 1; i < r.length; i++) {
+      const a = r[i - 1];
+      const b = r[i];
+      list.push({ key: Math.max(a.x + a.y + a.h, b.x + b.y + b.h) + 0.2, draw: (ctx) => routeSegment(ctx, a, b) });
+    }
+  }
+  list.sort((a, b) => a.key - b.key);
+  items = list;
+}
+
+const nodePos = (n) => [n.x + 0.5, n.y + 0.5, n.h + (n.rise ? 0.5 : 0)];
+function routeSegment(ctx, a, b) {
+  const [ax, ay, az] = nodePos(a);
+  const [bx, by, bz] = nodePos(b);
+  ctx.save();
+  ctx.setLineDash([4 * lw(), 4 * lw()]);
+  line(ctx, P(ax, ay, az + 0.04), P(bx, by, bz + 0.04), 1.6 * lw(), RED);
+  ctx.restore();
+}
+
+// ---------------- props ----------------
+function curve(ctx, pts, width, color = INK) {
+  ctx.lineWidth = width;
+  ctx.strokeStyle = color;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.stroke();
+}
+function onFace(p) {
+  // the +x or +y face of wall voxel (p.x, p.y, p.z) as a parallelogram
+  return p.face === 'x'
+    ? [P(p.x + 1, p.y, p.z), P(p.x + 1, p.y + 1, p.z), P(p.x + 1, p.y + 1, p.z + 1), P(p.x + 1, p.y, p.z + 1)]
+    : [P(p.x, p.y + 1, p.z), P(p.x + 1, p.y + 1, p.z), P(p.x + 1, p.y + 1, p.z + 1), P(p.x, p.y + 1, p.z + 1)];
+}
+const PROPS = {
+  grass(ctx, p) {
+    const R = rng(p.seed);
+    const w = lw();
+    for (let i = 0; i < 2 + Math.floor(R() * 3); i++) {
+      const [x, y] = P(p.x + 0.2 + R() * 0.6, p.y + 0.2 + R() * 0.6, p.z);
+      for (let b = 0; b < 3; b++) curve(ctx, [[x, y], [x + (b - 1) * 2 * w + (R() - 0.5) * w, y - (4 + R() * 4) * w]], 0.9 * w, INK2);
+    }
+  },
+  pebbles(ctx, p) {
+    const R = rng(p.seed);
+    for (let i = 0; i < 3; i++) {
+      const [x, y] = P(p.x + 0.2 + R() * 0.6, p.y + 0.2 + R() * 0.6, p.z);
+      const r = view.S * (0.05 + R() * 0.05);
+      ctx.beginPath();
+      ctx.ellipse(x, y - r * 0.4, r, r * 0.6, 0, 0, Math.PI * 2);
+      ctx.fillStyle = wash(MAT.STONE, 'top');
+      ctx.fill();
+      ctx.lineWidth = lw();
+      ctx.strokeStyle = INK;
+      ctx.stroke();
+    }
+  },
+  boulder(ctx, p) {
+    const R = rng(p.seed);
+    const [cx, cy] = P(p.x + 0.5, p.y + 0.5, p.z + 0.28);
+    const s = view.S;
+    const pts = [];
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      const r = 0.36 * (0.8 + R() * 0.35);
+      pts.push([cx + Math.cos(a) * r * s, cy + Math.sin(a) * r * s * (Math.sin(a) > 0 ? 0.55 : 0.75)]);
+    }
+    poly(ctx, pts);
+    ctx.fillStyle = wash(MAT.ROCK, 'left');
+    ctx.fill();
+    ctx.save(); poly(ctx, pts); ctx.clip();
+    ctx.fillStyle = wash(MAT.ROCK, 'right');
+    ctx.fillRect(cx, cy - s, s, 2 * s);
+    stipple(ctx, [[cx, cy - s * 0.4], [cx + s * 0.4, cy - s * 0.4], [cx + s * 0.4, cy + s * 0.3], [cx, cy + s * 0.3]], R, 16);
+    ctx.restore();
+    ctx.lineWidth = 1.8 * lw();
+    ctx.strokeStyle = INK;
+    ctx.lineJoin = 'round';
+    poly(ctx, pts);
+    ctx.stroke();
+    curve(ctx, [[cx - s * 0.1, cy - s * 0.2], [cx, cy - s * 0.05], [cx - s * 0.05, cy + s * 0.1]], 0.9 * lw(), INK2);
+  },
+  tree(ctx, p) {
+    const R = rng(p.seed);
+    const [bx, by] = P(p.x + 0.5, p.y + 0.5, p.z);
+    const s = view.S;
+    const w = lw();
+    const branch = (x, y, angle, len, width, depth) => {
+      const ex = x + Math.sin(angle) * len;
+      const ey = y - Math.cos(angle) * len;
+      const mx = (x + ex) / 2 + (R() - 0.5) * len * 0.25;
+      const my = (y + ey) / 2;
+      ctx.lineWidth = width;
+      ctx.strokeStyle = INK;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(mx, my, ex, ey);
+      ctx.stroke();
+      if (depth === 0) return;
+      const kids = depth > 2 ? 2 : 2 + Math.floor(R() * 2);
+      for (let i = 0; i < kids; i++) {
+        const spread = (i / (kids - 1 || 1) - 0.5) * (0.9 + R() * 0.5);
+        branch(ex, ey, angle + spread, len * (0.62 + R() * 0.15), Math.max(0.7 * w, width * 0.62), depth - 1);
+      }
+    };
+    for (const a of [-1.2, 0.3, 1.1]) curve(ctx, [[bx, by - 0.15 * s], [bx + Math.sin(a) * 0.3 * s, by + 0.05 * s]], 1.4 * w);
+    branch(bx, by, (R() - 0.5) * 0.3, s * 0.85, 3.2 * w, 5);
+  },
+  pickaxe(ctx, p) {
+    const [x, y] = P(p.x + 0.5, p.y + 0.5, p.z);
+    const s = view.S;
+    const w = lw();
+    curve(ctx, [[x - 0.35 * s, y + 0.05 * s], [x + 0.3 * s, y - 0.15 * s]], 1.6 * w);
+    curve(ctx, [[x + 0.12 * s, y - 0.32 * s], [x + 0.3 * s, y - 0.15 * s], [x + 0.38 * s, y + 0.08 * s]], 1.8 * w);
+  },
+  shovel(ctx, p) {
+    const [x, y] = P(p.x + 0.5, p.y + 0.5, p.z);
+    const s = view.S;
+    const w = lw();
+    curve(ctx, [[x - 0.35 * s, y - 0.1 * s], [x + 0.15 * s, y + 0.05 * s]], 1.5 * w);
+    const blade = [[x + 0.12 * s, y - 0.03 * s], [x + 0.36 * s, y + 0.02 * s], [x + 0.4 * s, y + 0.12 * s], [x + 0.18 * s, y + 0.12 * s]];
+    poly(ctx, blade);
+    ctx.fillStyle = SHEET;
+    ctx.fill();
+    ctx.lineWidth = 1.4 * w;
+    ctx.stroke();
+  },
+  crate(ctx, p) {
+    const faces = box(ctx, p.x + 0.18, p.y + 0.18, p.z, p.x + 0.82, p.y + 0.82, p.z + 0.62, MAT.WOOD, p.seed, 1.6);
+    for (const [f, pts] of faces) {
+      if (f === 'top') continue;
+      const w = lw();
+      line(ctx, at(pts, 0, 0), at(pts, 1, 1), 0.9 * w, INK2);
+      line(ctx, at(pts, 0, 1), at(pts, 1, 0), 0.9 * w, INK2);
+    }
+  },
+  barrel(ctx, p) {
+    const [x, y] = P(p.x + 0.5, p.y + 0.5, p.z);
+    const s = view.S;
+    const r = 0.3 * s;
+    const h = 0.72 * s;
+    ctx.beginPath();
+    ctx.moveTo(x - r, y - h);
+    ctx.lineTo(x - r, y);
+    ctx.ellipse(x, y, r, r * 0.5, 0, Math.PI, 0, true);
+    ctx.lineTo(x + r, y - h);
+    ctx.closePath();
+    ctx.fillStyle = wash(MAT.WOOD, 'left');
+    ctx.fill();
+    ctx.lineWidth = 1.6 * lw();
+    ctx.strokeStyle = INK;
+    ctx.stroke();
+    for (const t of [0.25, 0.75]) {
+      ctx.beginPath();
+      ctx.ellipse(x, y - h * t, r, r * 0.5, 0, 0, Math.PI);
+      ctx.lineWidth = 0.9 * lw();
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.ellipse(x, y - h, r, r * 0.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = wash(MAT.WOOD, 'top');
+    ctx.fill();
+    ctx.lineWidth = 1.6 * lw();
+    ctx.stroke();
+  },
+  bookshelf(ctx, p) {
+    const alongY = p.x <= p.y ? false : true;
+    const [x0, y0, x1, y1] = alongY ? [p.x + 0.1, p.y + 0.02, p.x + 0.9, p.y + 0.38] : [p.x + 0.02, p.y + 0.1, p.x + 0.38, p.y + 0.9];
+    const faces = box(ctx, x0, y0, p.z, x1, y1, p.z + 1.6, MAT.WOOD, p.seed, 1.6);
+    const front = faces.find(([f]) => f === (alongY ? 'left' : 'right'))[1];
+    const R = rng(p.seed);
+    for (const v of [0.3, 0.55, 0.8]) {
+      line(ctx, at(front, 0.05, v), at(front, 0.95, v), 1.1 * lw());
+      for (let u = 0.1; u < 0.9; u += 0.09 + R() * 0.06) line(ctx, at(front, u, v), at(front, u + 0.02, v + 0.14 + R() * 0.06), 0.9 * lw(), INK2);
+    }
+  },
+  bed(ctx, p) {
+    box(ctx, p.x + 0.1, p.y + 0.08, p.z, p.x + 0.9, p.y + 0.92, p.z + 0.32, MAT.WOOD, p.seed, 1.6);
+    box(ctx, p.x + 0.18, p.y + 0.12, p.z + 0.32, p.x + 0.42, p.y + 0.88, p.z + 0.44, MAT.STONE, p.seed + 1, 1.2);
+    line(ctx, P(p.x + 0.55, p.y + 0.08, p.z + 0.32), P(p.x + 0.55, p.y + 0.92, p.z + 0.32), 1 * lw(), INK2);
+  },
+  table(ctx, p) {
+    const w = lw();
+    for (const [a, b] of [[0.2, 0.2], [0.8, 0.2], [0.2, 0.8], [0.8, 0.8]]) line(ctx, P(p.x + a, p.y + b, p.z), P(p.x + a, p.y + b, p.z + 0.55), 1.5 * w);
+    box(ctx, p.x + 0.1, p.y + 0.1, p.z + 0.55, p.x + 0.9, p.y + 0.9, p.z + 0.65, MAT.WOOD, p.seed, 1.5);
+  },
+  chest(ctx, p) {
+    box(ctx, p.x + 0.2, p.y + 0.25, p.z, p.x + 0.8, p.y + 0.75, p.z + 0.42, settings.style === 'ink' ? MAT.STONE : MAT.WOOD, p.seed, 1.8);
+    const [x, y] = P(p.x + 0.8, p.y + 0.5, p.z + 0.25);
+    ctx.fillStyle = settings.style === 'ink' ? INK : '#d9a62e';
+    ctx.fillRect(x - lw() * 2, y - lw() * 2, lw() * 4, lw() * 4);
+    const [sx, sy] = P(p.x + 0.5, p.y + 0.5, p.z + 0.9);
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + 0.4;
+      line(ctx, [sx + Math.cos(a) * 3 * lw(), sy + Math.sin(a) * 3 * lw()], [sx + Math.cos(a) * 8 * lw(), sy + Math.sin(a) * 8 * lw()], 1.2 * lw(), RED);
+    }
+  },
+  flag(ctx, p) {
+    const [x, y] = P(p.x + 0.5, p.y + 0.5, p.z);
+    const s = view.S;
+    line(ctx, [x, y], [x, y - 1.2 * s], 1.6 * lw());
+    poly(ctx, [[x, y - 1.2 * s], [x + 0.5 * s, y - 1.05 * s], [x, y - 0.9 * s]]);
+    ctx.fillStyle = RED;
+    ctx.fill();
+    ctx.lineWidth = 1.2 * lw();
+    ctx.stroke();
+  },
+  window(ctx, p) {
+    const f = onFace(p);
+    const arch = [];
+    arch.push(at(f, 0.32, 0.12));
+    arch.push(at(f, 0.32, 0.6));
+    for (let i = 0; i <= 10; i++) { const t = Math.PI - (i / 10) * Math.PI; arch.push(at(f, 0.5 + 0.18 * Math.cos(t), 0.6 + 0.24 * Math.sin(t))); }
+    arch.push(at(f, 0.68, 0.12));
+    poly(ctx, arch);
+    ctx.fillStyle = settings.style === 'ink' ? '#3b3f47' : '#5b6f86';
+    ctx.fill();
+    ctx.lineWidth = 1.5 * lw();
+    ctx.strokeStyle = INK;
+    ctx.stroke();
+    line(ctx, at(f, 0.5, 0.12), at(f, 0.5, 0.82), 1 * lw(), SHEET);
+    line(ctx, at(f, 0.32, 0.45), at(f, 0.68, 0.45), 1 * lw(), SHEET);
+  },
+  torch(ctx, p) {
+    const f = onFace(p);
+    const w = lw();
+    line(ctx, at(f, 0.5, 0.25), at(f, 0.5, 0.55), 1.8 * w);
+    const [x, y] = at(f, 0.5, 0.55);
+    const s = view.S;
+    ctx.beginPath();
+    ctx.moveTo(x, y - 0.3 * s);
+    ctx.quadraticCurveTo(x + 0.12 * s, y - 0.1 * s, x, y);
+    ctx.quadraticCurveTo(x - 0.12 * s, y - 0.1 * s, x, y - 0.3 * s);
+    ctx.fillStyle = settings.style === 'ink' ? SHEET : '#f3b23a';
+    ctx.fill();
+    ctx.lineWidth = 1.2 * w;
+    ctx.strokeStyle = settings.style === 'ink' ? INK : RED;
+    ctx.stroke();
+  },
+};
+
+// ---------------- the walker ----------------
+const walker = { path: [], i: 0, t: 0, pos: [0, 0, 0], key: 0, phase: 0, node: null, pause: 0 };
+function drawWalker(ctx) {
+  const [wx, wy, wz] = walker.pos;
+  const [x, y] = P(wx, wy, wz);
+  const s = view.S;
+  const w = lw();
+  ctx.fillStyle = 'rgba(22, 24, 29, 0.18)';
+  ctx.beginPath();
+  ctx.ellipse(x, y, 0.26 * s, 0.13 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+  const swing = Math.sin(walker.phase) * 0.1 * s;
+  ctx.lineCap = 'round';
+  line(ctx, [x, y - 0.42 * s], [x - 0.07 * s + swing, y], 1.8 * w);
+  line(ctx, [x, y - 0.42 * s], [x + 0.07 * s - swing, y], 1.8 * w);
+  const cloak = [[x - 0.12 * s, y - 0.82 * s], [x - 0.24 * s, y - 0.34 * s], [x + 0.24 * s, y - 0.34 * s], [x + 0.12 * s, y - 0.82 * s]];
+  poly(ctx, cloak);
+  ctx.fillStyle = settings.style === 'ink' ? SHEET : '#e7d9b8';
+  ctx.fill();
+  ctx.lineWidth = 1.7 * w;
+  ctx.strokeStyle = INK;
+  ctx.stroke();
+  line(ctx, [x, y - 0.8 * s], [x - 0.03 * s, y - 0.36 * s], 0.9 * w, INK2);
+  ctx.beginPath();
+  ctx.arc(x, y - 0.95 * s, 0.14 * s, 0, Math.PI * 2);
+  ctx.fillStyle = SHEET;
+  ctx.fill();
+  ctx.stroke();
+  line(ctx, [x - 0.12 * s, y - 0.2 * s], [x + 0.08 * s, y - 0.22 * s], 1.4 * w, RED);
+  line(ctx, [x + 0.28 * s, y + 0.02 * s], [x + 0.33 * s, y - 1.15 * s], 1.6 * w);
+}
+
+// ---------------- rendering ----------------
+const canvas = $('view');
+const ctx = canvas.getContext('2d');
+const back = document.createElement('canvas');
+const front = document.createElement('canvas');
+let splitKey = Infinity;
+
+function fit() {
+  const rect = canvas.getBoundingClientRect();
+  view.dpr = Math.min(devicePixelRatio || 1, 2);
+  view.w = rect.width;
+  view.h = rect.height;
+  for (const c of [canvas, back, front]) {
+    c.width = Math.round(rect.width * view.dpr);
+    c.height = Math.round(rect.height * view.dpr);
+  }
+  if (!level) return;
+  // bounds of the level box in units of S
+  const L = level;
+  const zTop = L.H;
+  const xs = [(0 - L.D) * COS30, (L.W - 0) * COS30];
+  const ys = [0 - zTop, (L.W + L.D) * 0.5];
+  const spanX = xs[1] - xs[0];
+  const spanY = ys[1] - ys[0] - 3;
+  const pad = 36;
+  view.S = Math.max(10, Math.min((rect.width - pad * 2) / spanX, (rect.height - pad * 2 - 30) / spanY, 46));
+  view.OX = rect.width / 2 - ((xs[0] + xs[1]) / 2) * view.S;
+  view.OY = rect.height / 2 + 18 - ((ys[0] + 3 + ys[1]) / 2) * view.S;
+}
+
+function drawGrid(c) {
+  const s = view.S;
+  c.lineWidth = 0.7;
+  c.strokeStyle = GRID;
+  c.globalAlpha = 0.8;
+  c.beginPath();
+  const w = view.w;
+  const h = view.h;
+  const n = Math.ceil((w + h) / (s * 0.5)) + 4;
+  for (let m = -n; m <= n; m++) {
+    const x = view.OX + m * COS30 * s;
+    if (x >= -2 && x <= w + 2) { c.moveTo(x, 0); c.lineTo(x, h); }
+  }
+  // lines along +x and +y through lattice points P(i, j, 0)
+  for (let j = -n; j <= n; j++) {
+    const [ax, ay] = P(-n, j, 0);
+    const [bx, by] = P(n, j, 0);
+    c.moveTo(ax, ay); c.lineTo(bx, by);
+    const [cx, cy] = P(j, -n, 0);
+    const [dx, dy] = P(j, n, 0);
+    c.moveTo(cx, cy); c.lineTo(dx, dy);
+  }
+  c.stroke();
+  c.globalAlpha = 1;
+}
+
+function renderLayers(key) {
+  splitKey = key;
+  const bctx = back.getContext('2d');
+  const fctx = front.getContext('2d');
+  for (const c of [bctx, fctx]) c.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+  bctx.fillStyle = SHEET;
+  bctx.fillRect(0, 0, view.w, view.h);
+  if (settings.grid) drawGrid(bctx);
+  fctx.clearRect(0, 0, view.w, view.h);
+  for (const it of items) it.draw(it.key < key ? bctx : fctx);
+}
+
+function composite() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(back, 0, 0);
+  if (settings.walker && walker.path.length) {
+    ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+    drawWalker(ctx);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  ctx.drawImage(front, 0, 0);
+}
+
+// ---------------- walking ----------------
+const keyOf = (n) => n.x + n.y + n.h;
+function walkTo(path) {
+  walker.path = path;
+  walker.i = 0;
+  walker.t = 0;
+  walker.node = path[0];
+  walker.pos = nodePos(path[0]);
+}
+function stepWalker(dt) {
+  if (!walker.path.length) return;
+  if (walker.pause > 0) { walker.pause -= dt; return; }
+  const p = walker.path;
+  if (walker.i >= p.length - 1) {
+    // arrived: rest, then walk the route back the other way
+    walker.pause = 1.2;
+    walkTo([...p].reverse());
+    return;
+  }
+  walker.t += dt * 2.4;
+  walker.phase += dt * 11;
+  while (walker.t >= 1 && walker.i < p.length - 1) { walker.t -= 1; walker.i += 1; }
+  const a = p[walker.i];
+  const b = p[Math.min(walker.i + 1, p.length - 1)];
+  walker.node = walker.t < 0.5 ? a : b;
+  const A = nodePos(a);
+  const B = nodePos(b);
+  walker.pos = A.map((v, k) => v + (B[k] - v) * walker.t);
+  const key = Math.max(keyOf(a), keyOf(b));
+  if (key !== walker.key) {
+    walker.key = key;
+    renderLayers(key);
+  }
+}
+
+// ---------------- UI ----------------
+const toastEl = $('toast');
+let toastTimer = 0;
+function toast(text) {
+  toastEl.textContent = text;
+  toastEl.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toastEl.hidden = true; }, 1600);
+}
+
+function regenerate() {
+  level = generate({ seed: settings.seed, width: settings.size, depth: settings.size, storeys: settings.storeys });
+  $('seed').value = String(settings.seed);
+  $('stamp').innerHTML = `Изограф<small>сид ${settings.seed} · ${settings.storeys} ${settings.storeys === 1 ? 'этаж' : settings.storeys < 5 ? 'этажа' : 'этажей'}</small>`;
+  $('stats').innerHTML = `ступеней-вокселей <b>${level.stairs.size}</b> · маршрут <b>${level.route.length}</b> шагов<br>вход на высоте <b>${level.entrance.h}</b>, выход на <b>${level.exit.h}</b>`;
+  fit();
+  buildItems();
+  walkTo(level.route);
+  walker.key = keyOf(level.route[0]);
+  renderLayers(settings.walker ? walker.key : Infinity);
+  composite();
+}
+
+function segmented(id, values, key, labels = values) {
+  const el = $(id);
+  if (!el.children.length) {
+    values.forEach((v, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.v = String(v);
+      b.textContent = String(labels[i]);
+      el.append(b);
+    });
+  }
+  const sync = () => { for (const b of el.children) b.setAttribute('aria-pressed', String(b.dataset.v === String(settings[key]))); };
+  el.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    settings[key] = typeof settings[key] === 'number' ? Number(b.dataset.v) : b.dataset.v;
+    sync();
+    if (key === 'style') { buildItems(); renderLayers(settings.walker ? walker.key : Infinity); composite(); }
+    else regenerate();
+  });
+  sync();
+}
+segmented('storeys', [1, 2, 3, 4], 'storeys');
+segmented('size', [12, 16, 20], 'size', ['малый', 'средний', 'большой']);
+segmented('style', ['ink', 'color'], 'style');
+$('reroll').addEventListener('click', () => { settings.seed = 1 + Math.floor(Math.random() * 99999); regenerate(); });
+$('seed').addEventListener('change', (e) => { const v = Math.max(1, Math.floor(Number(e.target.value) || 1)); settings.seed = v; regenerate(); });
+for (const [id, key] of [['c-route', 'route'], ['c-walker', 'walker'], ['c-grid', 'grid']]) {
+  $(id).addEventListener('change', (e) => {
+    settings[key] = e.target.checked;
+    if (key === 'route') buildItems();
+    renderLayers(settings.walker ? walker.key : Infinity);
+    composite();
+  });
+}
+
+// click on a floor: the front-most walkable top under the pointer
+canvas.addEventListener('click', (e) => {
+  if (!level) return;
+  const rect = canvas.getBoundingClientRect();
+  const px = e.clientX - rect.left;
+  const py = e.clientY - rect.top;
+  const nodes = level.nodes().sort((a, b) => keyOf(b) - keyOf(a));
+  const inside = (pts) => {
+    let c = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [xi, yi] = pts[i];
+      const [xj, yj] = pts[j];
+      if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  };
+  for (const n of nodes) {
+    const z = n.h + (n.rise ? 0.5 : 0);
+    if (!inside([P(n.x, n.y, z), P(n.x + 1, n.y, z), P(n.x + 1, n.y + 1, z), P(n.x, n.y + 1, z)])) continue;
+    const from = walker.node ?? level.entrance;
+    const path = level.path(from, n);
+    if (!path) { toast('туда не пройти'); return; }
+    walker.pause = 0;
+    walkTo(path);
+    return;
+  }
+});
+
+// ---------------- the principle sketch ----------------
+function drawPrinciple() {
+  const c = $('principle');
+  const r = c.getBoundingClientRect();
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  c.width = Math.round(r.width * dpr);
+  c.height = Math.round(r.height * dpr);
+  const g = c.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const saved = { ...view };
+  view.S = 26;
+  view.w = r.width;
+  view.h = r.height;
+  view.OX = r.width * 0.24;
+  view.OY = r.height / 2 + 4;
+  g.fillStyle = SHEET;
+  g.fillRect(0, 0, r.width, r.height);
+  drawGrid(g);
+  // a cube: 3 rhombi = 6 triangles, outlined as a hexagon
+  const faces = box(g, 0, 0, 0, 1, 1, 1, MAT.STONE, 5, 1.8);
+  g.save();
+  g.setLineDash([3, 3]);
+  const hex = [P(1, 0, 0), P(1, 1, 0), P(0, 1, 0), P(0, 1, 1), P(0, 0, 1), P(1, 0, 1)];
+  poly(g, hex);
+  g.lineWidth = 1.4;
+  g.strokeStyle = RED;
+  g.stroke();
+  g.restore();
+  // the triangle split of each face
+  for (const [, pts] of faces) line(g, pts[0], pts[2], 0.8, INK2);
+  g.font = '600 18px Caveat, cursive';
+  const lx = r.width * 0.46;
+  const ly = r.height / 2 - 26;
+  g.fillStyle = INK;
+  g.fillText('куб =', lx, ly);
+  g.fillText('6 треугольников', lx, ly + 19);
+  g.fillStyle = RED;
+  g.fillText('(x,y,z) ≡', lx, ly + 44);
+  g.fillText('(x+1,y+1,z+1)', lx, ly + 63);
+  Object.assign(view, saved);
+}
+
+// ---------------- loop ----------------
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  if (settings.walker && level) {
+    stepWalker(dt);
+    composite();
+  }
+  requestAnimationFrame(loop);
+}
+
+new ResizeObserver(() => {
+  fit();
+  if (level) { renderLayers(settings.walker ? walker.key : Infinity); composite(); }
+  drawPrinciple();
+}).observe(document.querySelector('.sheet'));
+
+regenerate();
+drawPrinciple();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
