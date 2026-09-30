@@ -305,18 +305,6 @@ function settle(b, isl) {
     return reach;
 }
 
-function seaFloor(b, isl) {
-    const w = b.w;
-    for (const [q, r, x, y] of b.columns()) {
-        let near = Infinity;
-        for (const i of Object.values(isl)) near = Math.min(near, Math.hypot(x - i.x, y - i.y) - i.r);
-        const n = b.noise(x * 0.08, y * 0.08);
-        const floor = Math.round(Math.max(1, Math.min(SEA - 2, SEA - 2 - Math.max(0, near) * 0.22 + (n - 0.5) * 2.5)));
-        for (let z = 0; z < floor; z++) w.set(q, r, z, z === floor - 1 ? (floor >= SEA - 3 ? M.SAND : M.SEABED) : M.ROCK);
-        for (let z = floor; z < SEA; z++) w.set(q, r, z, M.WATER);
-    }
-}
-
 // ---------------------------------------------------------------- Salt Wharf
 function wharf(b, I) {
     const w = b.w;
