@@ -2,6 +2,7 @@
 // quests, professions, map, shops, crafting, dialogue, class choice).
 
 import { CLASSES, SKILLS, ITEMS, RARITY, PROFS, NPCS, SHOPS, QUESTS, RECIPES, STATIONS, ISLANDS, MONSTERS, STATS, XP_TO } from './data.js';
+import { STAT_HINT, MAX_SKILL, v } from './rules.js';
 import { INV_SIZE } from './sim.js';
 import { drawInkMap } from './inkmap.js';
 
@@ -13,12 +14,43 @@ export const SKILL_ICON = {
     slash: '⚔', whirl: '✺', cry: '!', arrow: '➶', rain: '☂', leap: '↶', water: '≈', wave: '≋', wind: '➹', whirlpool: '@',
     heal: '✚', thorns: '❦', swarm: '✧', slam: '✹', shield: '◈', seal: '⊗', curse: '☠', storm: 'ϟ', fog: '☁',
 };
-const SKILL_KIND = { melee: 'ближний удар', ranged: 'выстрел', magic: 'заклинание', aoe: 'вокруг себя', area: 'по площади', self: 'усиление', heal: 'лечение', dash: 'рывок', back: 'отскок' };
+const SKILL_KIND = { passive: 'пассивный', buff: 'усиление', melee: 'ближний удар', ranged: 'выстрел', magic: 'заклинание', aoe: 'вокруг себя', area: 'по площади', heal: 'лечение', spring: 'источник', dash: 'рывок', back: 'отскок' };
+
+// what the numbers of a skill mean at a given level, in words
+const pct = (x) => `${x > 0 ? '+' : ''}${Math.round(x * 100)}%`;
+const num = (x) => `${x > 0 ? '+' : ''}${Math.round(x * 10) / 10}`;
+const MOD_TEXT = {
+    atkPct: (x) => `атака ${pct(x)}`, defPct: (x) => `защита ${pct(x)}`, hit: (x) => `меткость ${num(x)}`, flee: (x) => `уклонение ${num(x)}`,
+    crit: (x) => `крит ${num(x)}%`, aspdPct: (x) => `скорость атаки ${pct(x)}`, speedPct: (x) => `шаг ${pct(x)}`, maxHpPct: (x) => `здоровье ${pct(x)}`,
+    maxSpPct: (x) => `запас духа ${pct(x)}`, spRegen: (x) => `восстановление духа ${pct(x)}`, shipSpeedPct: (x) => `ход шлюпа ${pct(x)}`,
+    shipDefPct: (x) => `броня шлюпа ${pct(x)}`, shield: (x) => `щит ${Math.round(x)}`, hidden: () => 'невидимость', dmgToSp: (x) => `${Math.round(x * 100)}% урона в дух`,
+    secondWind: (x) => `вернёт ${Math.round(x * 100)}% здоровья`,
+};
+const DEBUFF_TEXT = {
+    defPct: (x) => `защита врага ${pct(x)}`, atkPct: (x) => `атака врага ${pct(x)}`, fleePct: (x) => `уклонение врага ${pct(x)}`, slow: (x) => `шаг врага до ${Math.round(x * 100)}%`,
+};
+export function skillNumbers(s, lvl, spr = 0) {
+    const out = [];
+    if (s.mult && v(s.mult, lvl) > 0) out.push(`сила ×${v(s.mult, lvl).toFixed(2)}${s.hits > 1 ? ` ×${s.hits} удара` : ''}`);
+    if (s.heal) out.push(`лечит ${Math.round(v(s.heal, lvl) + spr * (s.healSpr ?? 0))}${s.kind === 'spring' ? '/с' : ''}`);
+    for (const [k, x] of Object.entries(s.mods ?? {})) out.push(MOD_TEXT[k]?.(k === 'shield' ? v(x, lvl) + spr * (s.shieldSpr ?? 0) : v(x, lvl)) ?? k);
+    for (const [k, x] of Object.entries(s.debuff ?? {})) out.push(DEBUFF_TEXT[k]?.(v(x, lvl)) ?? k);
+    if (s.stun) out.push(`оглушение ${v(s.stun, lvl).toFixed(1)} с`);
+    if (s.root) out.push(`путы ${v(s.root, lvl).toFixed(1)} с`);
+    if (s.disarm) out.push(`не бьёт ${v(s.disarm, lvl).toFixed(1)} с`);
+    if (s.dot) out.push(`яд ×${v(s.dot, lvl).toFixed(2)} × ${s.ticks} с`);
+    if (s.ignoreDef) out.push('сквозь броню');
+    if (s.taunt) out.push('вызов на себя');
+    if (s.dur && s.kind !== 'passive') out.push(`${Math.round(v(s.dur, lvl))} с`);
+    if (s.weapon) out.push(`с оружием: ${s.weapon.map((w) => WEAPON_NAME[w]).join(', ')}`);
+    return out.join(' · ');
+}
+const WEAPON_NAME = { blade: 'клинок', greatblade: 'двуручник', dual: 'парные', bow: 'лук', gun: 'мушкет', staff: 'посох', censer: 'кадило' };
 
 export function itemIcon(id) {
     const d = ITEMS[id];
     if (!d) return { g: '?', c: '#888' };
-    if (d.slot === 'weapon') return { g: { blade: '⚔', greatblade: '⚔', dual: '⚔', bow: '➶', staff: '✦', censer: '✺' }[d.type] ?? '⚔', c: d.rare ? '#8a5ac8' : '#6a7078' };
+    if (d.slot === 'weapon') return { g: { blade: '⚔', greatblade: '⚔', dual: '⚔', bow: '➶', gun: '⌐', staff: '✦', censer: '✺' }[d.type] ?? '⚔', c: d.rare ? '#8a5ac8' : '#6a7078' };
     if (d.slot === 'armor') return { g: '▣', c: d.rare ? '#8a5ac8' : '#8a6446' };
     if (d.slot === 'ring') return { g: '○', c: '#c9a03a' };
     if (d.heal) return { g: '♥', c: '#c9483e' };
@@ -34,7 +66,7 @@ const iconHtml = (id, cls = 'icon') => { const i = itemIcon(id); return `<div cl
 function itemMeta(g, id, up = 0) {
     const d = ITEMS[id];
     const parts = [];
-    if (d.slot === 'weapon') parts.push(`атака ${Math.round(d.atk * (1 + up * 0.08))}${d.matk ? `, магия ${Math.round(d.matk * (1 + up * 0.08))}` : ''}${d.range ? `, дальность ${d.range}` : ''}`);
+    if (d.slot === 'weapon') parts.push(`атака ${Math.round(d.atk[0] * (1 + up * 0.08))}–${Math.round(d.atk[1] * (1 + up * 0.08))}${d.matk ? `, магия ${Math.round(d.matk * (1 + up * 0.08))}` : ''}${d.range ? `, дальность ${d.range}` : ''}`);
     if (d.slot === 'armor') parts.push(`защита ${Math.round(d.def * (1 + up * 0.08))}`);
     if (d.bonus) parts.push(Object.entries(d.bonus).map(([k, v]) => `${STATS[k]} +${v}`).join(', '));
     if (d.heal) parts.push(`лечит ${d.heal}`);
@@ -60,7 +92,7 @@ export class UI {
         this.isDirty = true;
         $('veil').onclick = () => this.close();
         for (const b of document.querySelectorAll('#menu .btn')) b.onclick = () => this.toggle(b.dataset.w);
-        $('points').onclick = () => this.openWin('char');
+        $('points').onclick = () => this.openWin(this.g.hero.points > 0 ? 'char' : 'skills');
         this.buildBar();
     }
 
@@ -133,11 +165,12 @@ export class UI {
             $('lvl').textContent = h.lvl;
             $('myname').textContent = cl.name;
             $('gold').textContent = `${h.gold} з`;
-            $('points').hidden = h.points <= 0;
-            $('points').textContent = `+${h.points} очк. характеристик`;
+            $('points').hidden = h.points <= 0 && h.tp <= 0;
+            $('points').textContent = [h.points > 0 ? `+${h.points} характ.` : '', h.tp > 0 ? `+${h.tp} навык.` : ''].filter(Boolean).join(' · ');
             this.tracker();
             const dot = (w, on) => { const b = document.querySelector(`#menu [data-w="${w}"]`); let d = b.querySelector('.dot'); if (on && !d) { d = document.createElement('i'); d.className = 'dot'; b.appendChild(d); } else if (!on && d) d.remove(); };
             dot('char', h.points > 0);
+            dot('skills', h.tp > 0 && h.classes.some((c) => CLASSES[c].skills.some((id) => !g.canLearn(id))));
             dot('quests', Object.values(h.quests).some((q) => q.state === 'ready'));
         }
         $('shipbar').hidden = !h.sailing;
@@ -168,7 +201,7 @@ export class UI {
                 cd = h.cds[id] ?? 0;
                 max = SKILLS[id].cd;
                 off = !known.has(id);
-                nomp = h.mp < SKILLS[id].mp;
+                nomp = h.mp < g.skillCost(id);
             } else if (id && ITEMS[id]) {
                 const ic = itemIcon(id);
                 glyph = ic.g;
@@ -278,28 +311,34 @@ export class UI {
         const g = this.g;
         const h = g.hero;
         const cl = CLASSES[h.cls];
-        const stats = Object.entries(STATS).map(([k, name]) => `<div class="stat"><span>${name}</span><span><b>${g.stat(h, k)}</b>${h.points > 0 ? `<button class="btn" data-k="${k}">+</button>` : ''}</span></div>`).join('');
+        const d = g.d(h);
+        const stats = Object.entries(STATS).map(([k, name]) => {
+            const base = h.base[k];
+            const all = d.st[k];
+            return `<div class="stat" title="${esc(STAT_HINT[k])}"><span>${name}<small class="meta"> · ${esc(STAT_HINT[k])}</small></span><span><b>${all}</b>${all !== base ? `<small class="meta"> (${base}+${all - base})</small>` : ''}${h.points > 0 ? `<button class="btn" data-k="${k}" aria-label="${name} +1">+</button>` : ''}</span></div>`;
+        }).join('');
         const der = [
-            ['Здоровье', Math.round(g.maxHp(h))], ['Дух', Math.round(g.maxMp(h))], ['Сила удара', Math.round(g.power())], ['Магия', Math.round(g.magic())],
-            ['Защита', Math.round(g.defense())], ['Меткость', Math.round(g.hitRate())], ['Уклонение', Math.round(g.dodge())], ['Крит', g.critRate().toFixed(1) + '%'],
-            ['Скорость атаки', (1 / g.interval()).toFixed(2) + '/с'],
+            ['Здоровье', d.maxHp], ['Дух', d.maxSp], ['Атака', `${d.atkMin}–${d.atkMax}`], ['Магия', d.matk],
+            ['Защита', d.def], ['Меткость', d.hit], ['Уклонение', d.flee], ['Крит', d.crit.toFixed(1) + '%'],
+            ['Удар раз в', d.aspd.toFixed(2) + ' с'], ['Добыча', d.mf + '%'], ['Восстановление', `${d.hrec.toFixed(1)} / ${d.srec.toFixed(1)} в с`],
         ].map(([a, b]) => `<div class="stat"><span>${a}</span><b>${b}</b></div>`).join('');
         const eq = ['weapon', 'armor', 'ring'].map((slot) => {
             const e = h.equip[slot];
             const name = { weapon: 'Оружие', armor: 'Доспех', ring: 'Кольцо' }[slot];
             if (!e) return `<div class="eq"><div class="item empty"></div><div><b>${name}</b><br><small>пусто</small></div></div>`;
-            const d = ITEMS[e.id];
-            return `<div class="eq"><div class="item" data-slot="${slot}" style="color:${RARITY[d.rare ?? 0]}">${iconHtml(e.id)}${e.up ? `<span class="u">+${e.up}</span>` : ''}</div><div><b>${esc(d.name)}${e.up ? ' +' + e.up : ''}</b><br><small>${esc(itemMeta(g, e.id, e.up))}</small></div></div>`;
+            const it = ITEMS[e.id];
+            return `<div class="eq"><div class="item" data-slot="${slot}" style="color:${RARITY[it.rare ?? 0]}">${iconHtml(e.id)}${e.up ? `<span class="u">+${e.up}</span>` : ''}</div><div><b>${esc(it.name)}${e.up ? ' +' + e.up : ''}</b><br><small>${esc(itemMeta(g, e.id, e.up))}</small></div></div>`;
         }).join('');
         const path = h.classes.map((c) => CLASSES[c].name).join(' → ');
         this.frame(`${cl.name} · ${h.lvl} ур.`, `
             <div class="row2">
                 <div>
                     <div class="info" style="margin-top:0"><h3>${esc(path)}</h3><div class="meta">${esc(cl.desc)}</div>
-                    <div class="meta" style="margin-top:4px">Опыт ${h.xp} / ${XP_TO(h.lvl)} · Золото <span class="gold">${h.gold}</span></div></div>
+                    <div class="meta" style="margin-top:4px">Опыт ${h.xp} / ${XP_TO(h.lvl)} · Золото <span class="gold">${h.gold}</span> · Очки навыков ${h.tp}</div></div>
                     <h3 class="hand" style="margin:8px 0 2px;font-size:22px">Характеристики ${h.points > 0 ? `<small style="font:800 12px Nunito;color:var(--teal-d)">свободно: ${h.points}</small>` : ''}</h3>
                     ${stats}
                     ${h.points > 0 ? '<div style="margin-top:6px"><button class="btn teal" id="auto">Распределить по классу</button></div>' : ''}
+                    <div class="meta" style="margin-top:6px">Очко за уровень, пять за каждый десятый. Класс решает, сколько даёт каждая единица.</div>
                 </div>
                 <div>${eq}<div style="margin-top:6px">${der}</div></div>
             </div>`);
@@ -338,25 +377,38 @@ export class UI {
     wSkills() {
         const g = this.g;
         const h = g.hero;
-        const known = new Set(g.skills());
+        const spr = g.stat(h, 'spr');
         const rows = [];
         for (const c of h.classes) {
             const cl = CLASSES[c];
             rows.push(`<h3 class="hand" style="margin:6px 0 4px;font-size:22px">${esc(cl.name)}</h3>`);
-            cl.skills.forEach((id, i) => {
+            for (const id of cl.skills) {
                 const s = SKILLS[id];
-                const lvl = s.lvl ?? [[1, 3], [8, 10, 12, 15], [20, 23]][cl.tier][i];
-                const on = known.has(id);
+                const lvl = h.sk[id] ?? 0;
+                const why = g.canLearn(id);
+                const active = s.kind !== 'passive';
                 const slot = h.bar.indexOf(id);
-                rows.push(`<div class="li ${on ? '' : 'off'}" style="opacity:${on ? 1 : 0.5}" data-s="${id}"><b>${SKILL_ICON[s.fx] ?? '✦'} ${esc(s.name)}</b>${slot >= 0 ? ` <span class="meta">[${slot + 1}]</span>` : ''}<small>${SKILL_KIND[s.kind]} · дух ${s.mp} · перезарядка ${s.cd} с${s.mult ? ` · сила ×${s.mult}` : ''}${on ? '' : ` · откроется на ${lvl} ур.`}</small></div>`);
-            });
+                const req = (s.req ?? []).map(([r, l]) => `${SKILLS[r].name} ${l}`).join(', ');
+                const locked = (s.req ?? []).some(([r, l]) => (h.sk[r] ?? 0) < l);
+                const now = lvl ? skillNumbers(s, lvl, spr) : '';
+                const nxt = lvl < MAX_SKILL ? skillNumbers(s, lvl + 1, spr) : '';
+                const cost = active && s.mp ? ` · дух ${Math.round(v(s.mp, Math.max(1, lvl)))} · ${s.cd} с` : '';
+                rows.push(`<div class="li sk ${lvl ? '' : 'off'}" ${lvl && active ? `data-s="${id}"` : ''} style="opacity:${lvl || !locked ? 1 : 0.55}">
+                    <div class="skh"><b>${SKILL_ICON[s.fx] ?? (active ? '✦' : '◇')} ${esc(s.name)}</b> <span class="meta">${lvl}/${MAX_SKILL}</span>${slot >= 0 ? ` <span class="meta">[${slot + 1}]</span>` : ''}
+                    ${!why ? `<button class="btn teal plus" data-l="${id}" aria-label="Поднять навык ${esc(s.name)}">+</button>` : ''}</div>
+                    <small>${SKILL_KIND[s.kind]}${cost} — ${esc(s.desc)}</small>
+                    ${now ? `<small>Сейчас: ${esc(now)}</small>` : ''}
+                    ${nxt ? `<small class="nx">${lvl ? 'Дальше' : 'На 1 уровне'}: ${esc(nxt)}</small>` : ''}
+                    ${req && locked ? `<small class="rq">Нужно: ${esc(req)}</small>` : ''}
+                </div>`);
+            }
         }
         const next = CLASSES[h.cls].next;
         const hint = next ? `<div class="info">Следующий путь на ${CLASSES[h.cls].nextLevel} уровне: ${next.map((n) => CLASSES[n].name).join(', ')}.</div>` : '';
-        this.frame('Навыки', `<div class="meta">Нажми на навык, чтобы поставить его на панель (или убрать).</div><div class="list" style="margin-top:6px">${rows.join('')}</div>${hint}`);
+        this.frame(`Навыки · очков: ${h.tp}`, `<div class="meta">Очко навыка — за каждый уровень со второго. «+» поднимает навык, у каждого десять уровней; сильные открываются после тех, из которых растут. Нажми на изученный навык, чтобы поставить его на панель.</div><div class="list" style="margin-top:6px">${rows.join('')}</div>${hint}`);
+        this.on('[data-l]', (el, e) => { e.stopPropagation(); g.learnSkill(el.dataset.l); this.buildBar(); this.dirty(); });
         this.on('[data-s]', (el) => {
             const id = el.dataset.s;
-            if (!known.has(id)) return;
             const i = h.bar.indexOf(id);
             if (i >= 0) h.bar[i] = null;
             else { const f = h.bar.indexOf(null); if (f >= 0) h.bar[f] = id; else h.bar[0] = id; }

@@ -149,7 +149,7 @@ export function defaultDoc(seed = 7) {
         { x: 180, y: 176, rad: 21, biome: 'snow', peak: 4, lvl: [22, 28], name: 'Ледяной Клык' },
         { x: 192, y: 84, rad: 16, biome: 'swamp', peak: 2, lvl: [12, 16], name: 'Гнилая Топь' },
         { x: 104, y: 184, rad: 16, biome: 'jungle', peak: 3, lvl: [18, 24], name: 'Зелёный Зуб' },
-        { x: 198, y: 130, rad: 11, biome: 'volcanic', peak: 4, lvl: [26, 30], name: 'Пепельный остров' },
+        { x: 198, y: 130, rad: 11, biome: 'volcanic', peak: 4, lvl: [28, 38], name: 'Пепельный остров' },
         { x: 20, y: 92, rad: 10, biome: 'ruins', peak: 2, lvl: [10, 14], name: 'Старая Застава' },
     ];
     for (const reg of regionList(doc)) {

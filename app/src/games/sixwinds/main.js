@@ -19,14 +19,14 @@ export const LOOK = {
     hunter: { coat: 0x6f9a4a, hat: 'hood', hatColor: 0x4f7a3a },
     explorer: { coat: 0x2f6f9a, hat: 'tricorn', hatColor: 0x23282c },
     herbalist: { coat: 0xb07cd6, hat: 'straw' },
-    boarder: { coat: 0xa0302a, hat: 'bandana', hatColor: 0x23282c, cape: 0x23282c },
-    duelist: { coat: 0xd8703a, hat: 'tricorn', hatColor: 0x7a2a24, cape: 0xc9483e },
-    sniper: { coat: 0x4f7a3a, hat: 'hood', hatColor: 0x2f4a2a, cape: 0x6f9a4a },
-    navigator: { coat: 0x2f4f7a, hat: 'bicorne', hatColor: 0x23282c, cape: 0x3f95b8 },
-    tidepriest: { coat: 0x5fb8c8, hat: 'scarf', hatColor: 0xeee2c8, cape: 0xeee2c8 },
-    sealer: { coat: 0x7a4ab0, hat: 'hood', hatColor: 0x3a2a5a, cape: 0x23282c },
+    champion: { coat: 0xa0302a, hat: 'bandana', hatColor: 0x23282c, cape: 0x23282c },
+    crusader: { coat: 0xd8703a, hat: 'tricorn', hatColor: 0x7a2a24, cape: 0xc9483e },
+    sharpshooter: { coat: 0x4f7a3a, hat: 'hood', hatColor: 0x2f4a2a, cape: 0x6f9a4a },
+    voyager: { coat: 0x2f4f7a, hat: 'bicorne', hatColor: 0x23282c, cape: 0x3f95b8 },
+    cleric: { coat: 0x5fb8c8, hat: 'scarf', hatColor: 0xeee2c8, cape: 0xeee2c8 },
+    sealmaster: { coat: 0x7a4ab0, hat: 'hood', hatColor: 0x3a2a5a, cape: 0x23282c },
 };
-const WEAPON_MODEL = { blade: 'saber', greatblade: 'greatblade', dual: 'dual', bow: 'bow', staff: 'staff', censer: 'censer', fist: 'none' };
+const WEAPON_MODEL = { blade: 'saber', greatblade: 'greatblade', dual: 'dual', bow: 'bow', gun: 'gun', staff: 'staff', censer: 'censer', fist: 'none' };
 
 // ------------------------------------------------------------------ sounds
 const SFX = {

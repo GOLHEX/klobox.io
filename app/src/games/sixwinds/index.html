@@ -142,6 +142,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .num.hurt { color: #ff8a7a; }
 .num.heal { color: #8ff0a8; }
 .num.miss { color: #d8d8d8; font-size: 13px; }
+.num.dot { color: #b8e07a; font-size: 13px; }
 .num.xp { color: #ffe08a; font-size: 13px; }
 .num.gold { color: #ffd24a; font-size: 13px; }
 .num.ship { color: #ffb070; }
@@ -177,6 +178,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .list .li.on { background: var(--paper3); }
 .list .li b { font: 700 20px/1.05 Caveat, cursive; }
 .list .li small { display: block; color: var(--muted); font-weight: 700; }
+.list .li.sk { cursor: default; }
+.list .li.sk[data-s] { cursor: pointer; }
+.li.sk .skh { display: flex; align-items: center; gap: 6px; }
+.li.sk .plus { margin-left: auto; padding: 0 10px; font-size: 16px; line-height: 24px; min-width: 32px; }
+.li.sk small.nx { color: var(--teal-d); }
+.li.sk small.rq { color: #b0402f; }
 .dlg { display: flex; gap: 12px; }
 .dlg .who { flex: none; width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--ink); display: grid; place-items: center; font: 700 34px Caveat, cursive; color: #fff; }
 .dlg p { margin: 0 0 8px; font-size: 15px; }

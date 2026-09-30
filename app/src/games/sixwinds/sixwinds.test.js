@@ -3,7 +3,8 @@ import { HexWorld, M, nodeKey } from './world.js';
 import { Body, stepBody } from './physics.js';
 import { generateWorld } from './gen.js';
 import { Game } from './sim.js';
-import { QUESTS, ITEMS, SKILLS, CLASSES } from './data.js';
+import { QUESTS, ITEMS, SKILLS, CLASSES, XP_TO } from './data.js';
+import { derive, apFor, missChance, damage } from './rules.js';
 
 const FRAME = 1 / 30;
 const gen = generateWorld(7);
@@ -180,23 +181,96 @@ describe('the story and the trades', () => {
         expect(g.count('potion_s')).toBe(4);
     });
 
-    test('at level 8 the novice chooses a class and gets its weapon and skills', () => {
+    test('at level 10 the novice chooses a class, then buys skills with skill points', () => {
         const g = new Game(gen, { seed: 4 });
-        g.gainXp(5000);
-        expect(g.hero.lvl).toBeGreaterThanOrEqual(8);
+        expect(g.chooseClass('hunter')).toBe(false);
+        g.gainXp(XP_TO(1) + XP_TO(2) + XP_TO(3) + XP_TO(4) + XP_TO(5) + XP_TO(6) + XP_TO(7) + XP_TO(8) + XP_TO(9));
+        expect(g.hero.lvl).toBe(10);
+        // 4 to start, one a level, five at the tenth
+        expect(g.hero.points).toBe(4 + 8 + 5);
+        expect(g.hero.tp).toBe(9);
         expect(g.chooseClass('hunter')).toBe(true);
         expect(g.weapon().type).toBe('bow');
-        expect(g.skills()).toContain('aimed');
+        expect(g.hero.sk.range_mastery).toBe(1);
         expect(g.chooseClass('swordsman')).toBe(false);
-        // a skill shoots at a target in range
+        // a skill opens only after the one it grows from
+        expect(g.canLearn('double_shot')).toMatch(/Сначала/);
+        expect(g.learnSkill('range_mastery')).toBe(true);
+        expect(g.learnSkill('range_mastery')).toBe(true);
+        expect(g.learnSkill('double_shot')).toBe(true);
+        expect(g.skills()).toContain('double_shot');
+        expect(g.canLearn('frost_arrow')).toMatch(/Сначала/);
+        expect(g.hero.tp).toBe(6);
+        // the passive shows in the attack: mastery 3 with a bow
+        const bare = derive({ ...g.hero, sk: {} }, ITEMS, g.weapon());
+        expect(g.d().atkMax).toBeGreaterThan(bare.atkMax);
+        // two arrows at a target in range
         const m = g.mobs.find((x) => x.kind === 'boar');
         place(g, m.body.x + 4, m.body.y, m.body.z);
         g.setTarget(m, true);
         g.hero.mp = 100;
-        expect(g.useSkill('aimed')).toBe(true);
-        expect(g.shots.length).toBe(1);
+        expect(g.useSkill('double_shot')).toBe(true);
+        expect(g.shots.length).toBe(2);
         run(g, 1);
-        expect(m.hp < m.max || m.dead || g.ev.length >= 0).toBe(true);
+        expect(m.hp < m.max || m.dead).toBe(true);
+    });
+
+    test('the second class opens at 40 and brings its own tree', () => {
+        const g = new Game(gen, { seed: 4 });
+        let xp = 0;
+        for (let l = 1; l < 40; l++) xp += XP_TO(l);
+        g.gainXp(xp);
+        expect(g.hero.lvl).toBe(40);
+        expect(g.chooseClass('herbalist')).toBe(true);
+        expect(g.chooseClass('cleric')).toBe(true);
+        expect(g.hero.classes).toEqual(['novice', 'herbalist', 'cleric']);
+        expect(g.canLearn('greater_heal')).toBe(null);
+        expect(g.canLearn('howl')).toMatch(/класс/);
+        g.learnSkill('greater_heal');
+        g.hero.hp = 10;
+        g.hero.mp = 200;
+        expect(g.useSkill('greater_heal')).toBe(true);
+        expect(g.hero.hp).toBeGreaterThan(100);
+    });
+
+    test('buffs, debuffs and damage over time follow the skill level', () => {
+        const g = new Game(gen, { seed: 12 });
+        g.gainXp(200000);
+        g.chooseClass('swordsman');
+        g.autoPoints();
+        g.hero.tp = 20;
+        for (let i = 0; i < 3; i++) g.learnSkill('sword_mastery');
+        g.learnSkill('steel_will');
+        const def0 = g.defense();
+        g.hero.mp = 500;
+        expect(g.useSkill('steel_will')).toBe(true);
+        run(g, 0.1);
+        expect(g.defense()).toBeGreaterThan(def0);
+        g.learnSkill('break_armor');
+        const m = g.mobs.find((x) => x.kind === 'boar');
+        peaceful(g);
+        m.dead = 0;
+        m.hp = m.max = 1e6;
+        place(g, m.body.x + 1, m.body.y, m.body.z);
+        g.setTarget(m, true);
+        // until the blow lands (it can miss)
+        for (let i = 0; i < 20 && !m.debuffs.length; i++) { g.hero.cds.break_armor = 0; g.hero.mp = 500; g.useSkill('break_armor'); }
+        expect(g.mobMod(m, 'defPct')).toBeCloseTo(-0.12, 5);
+    });
+
+    test('the formulas of a blow', () => {
+        expect(apFor(9)).toBe(1);
+        expect(apFor(10)).toBe(5);
+        expect(apFor(61)).toBe(2);
+        expect(missChance(50, 20)).toBe(0);
+        expect(missChance(10, 40)).toBeCloseTo(0.4, 5);
+        expect(missChance(0, 500)).toBe(0.9);
+        // defence subtracts, levels tilt it by 2.5% each, the floor is a quarter of the level
+        expect(damage(100, 20, 0, 10, 10)).toBe(80);
+        expect(damage(100, 20, 0, 12, 10)).toBe(84);
+        expect(damage(100, 20, 0, 30, 10)).toBe(96);
+        expect(damage(10, 50, 0, 20, 20)).toBe(6);
+        expect(damage(100, 0, 50, 10, 10)).toBe(50);
     });
 
     test('the ship sails to Azure and lands there', () => {
@@ -232,9 +306,12 @@ describe('the story and the trades', () => {
         g.gainXp(400);
         g.give('log', 5);
         g.accept('crabs');
+        g.learnSkill('strike');
         const s = JSON.parse(JSON.stringify(g.save()));
         const g2 = new Game(gen, { save: s });
         expect(g2.hero.lvl).toBe(g.hero.lvl);
+        expect(g2.hero.sk.strike).toBe(2);
+        expect(g2.hero.tp).toBe(g.hero.tp);
         expect(g2.count('log')).toBe(5);
         expect(g2.hero.quests.crabs.state).toBe('active');
     });
@@ -244,7 +321,12 @@ describe('the story and the trades', () => {
             if (q.next) expect([id, !!QUESTS[q.next]]).toEqual([id, true]);
             for (const [it] of q.reward.items ?? []) expect([id, !!ITEMS[it]]).toEqual([id, true]);
         }
-        for (const c of Object.values(CLASSES)) for (const s of c.skills) expect([s, !!SKILLS[s]]).toEqual([s, true]);
+        for (const [cid, c] of Object.entries(CLASSES)) {
+            for (const s of c.skills) expect([s, SKILLS[s]?.cls]).toEqual([s, cid]);
+            for (const n of c.next ?? []) expect([n, !!CLASSES[n]]).toEqual([n, true]);
+        }
+        // every prerequisite is a skill of the same tree
+        for (const s of Object.values(SKILLS)) for (const [r] of s.req ?? []) expect([s.id, SKILLS[r]?.cls]).toEqual([s.id, s.cls]);
     });
 });
 

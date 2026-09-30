@@ -457,6 +457,7 @@ export function buildPerson(o = {}) {
     else if (w === 'greatblade') { k.box(0.08, 0.04, 0.9, 0xe0e4ec, 0.4, 0, 0.1, { rot: [0, 1.25, 0], emit: 0.1 }, wg); k.box(0.06, 0.26, 0.06, C.gold, 0.03, 0, 0, {}, wg); }
     else if (w === 'dual') { k.box(0.03, 0.03, 0.4, 0xe0e4ec, 0.16, 0, 0, { rot: [0, 1.3, 0] }, wg); const w2 = k.group(0.04, 0, -0.26, parts.arm2); k.box(0.03, 0.03, 0.4, 0xe0e4ec, 0.16, 0, 0, { rot: [0, 1.3, 0] }, w2); }
     else if (w === 'bow') { k.torus(0.32, 0.025, C.wood, 0.05, 0, 0.1, { rot: [0, 0, 0], seg: 4, seg2: 10 }, wg).scale.set(0.5, 1, 1); }
+    else if (w === 'gun') { k.cyl(0.03, 0.03, 0.8, C.dark, 0.3, 0, 0.05, { rot: [0, 1.35, 0], seg: 6 }, wg); k.box(0.07, 0.06, 0.26, C.wood, 0.02, 0, -0.02, { rot: [0, 1.2, 0] }, wg); }
     else if (w === 'staff') { k.cyl(0.025, 0.025, 1.1, C.wood, 0.02, 0, 0.3, { seg: 5 }, wg); k.ico(0.1, 0x6ff5cf, 0.02, 0, 0.88, { emit: 0.8 }, wg); }
     else if (w === 'censer') { k.cyl(0.02, 0.02, 0.8, C.dark, 0.02, 0, 0.2, { seg: 4 }, wg); k.ball(0.1, C.gold, 0.02, 0, -0.22, { seg: 7, seg2: 5 }, wg); k.ball(0.05, 0xb07cd6, 0.02, 0, -0.2, { emit: 0.8, seg: 5, seg2: 4 }, wg); }
     else if (w === 'dagger') k.box(0.03, 0.03, 0.3, 0xcfd2da, 0.12, 0, 0, { rot: [0, 1.3, 0] }, wg);

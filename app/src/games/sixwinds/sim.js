@@ -6,8 +6,9 @@ import { Body, stepBody, respawn } from './physics.js';
 import { center, hexAt, LAYER, DIRS, mulberry32, disk } from './hex.js';
 import { M, MAT, nodeKey } from './world.js';
 import {
-    CLASSES, SKILLS, ITEMS, MONSTERS, monsterStats, NPCS, SHOPS, QUESTS, NODES, FISH, RECIPES, PROFS, XP_TO, POINTS_PER_LEVEL, ISLANDS,
+    CLASSES, SKILLS, ITEMS, MONSTERS, monsterStats, NPCS, SHOPS, QUESTS, NODES, FISH, RECIPES, PROFS, XP_TO, ISLANDS,
 } from './data.js';
+import { derive, damage, missChance, critChance, v, apFor, tpFor, MAX_SKILL, FIRST_CLASS_LEVEL } from './rules.js';
 
 // the generator adds people and errands of its own; they join the shared tables
 export function adoptWorld(gen) {
@@ -20,11 +21,11 @@ export function adoptWorld(gen) {
 }
 
 export const INV_SIZE = 30;
-export const SAVE_KEY = 'sixwinds-save-1';
+export const SAVE_KEY = 'sixwinds-save-2';
 const DAY_LENGTH = 720; // seconds for a whole day
 const ACTIVE = 42; // creatures farther than this from the hero sleep
-const SKILL_LEVELS = { 0: [1, 3], 1: [8, 10, 12, 15], 2: [20, 23] };
-const STARTER = { swordsman: 'boarding_saber', hunter: 'short_bow', explorer: 'tide_rod', herbalist: 'herb_censer', boarder: 'cleaver', duelist: 'twin_dirks', sniper: 'whalebone_bow', navigator: 'coral_rod', tidepriest: 'pearl_censer', sealer: 'coral_rod' };
+const STARTER = { swordsman: 'boarding_saber', hunter: 'short_bow', explorer: 'tide_rod', herbalist: 'herb_censer', champion: 'cleaver', crusader: 'twin_dirks', sharpshooter: 'musket', voyager: 'storm_staff', cleric: 'pearl_staff', sealmaster: 'pearl_staff' };
+const ACTIVE_KINDS = ['melee', 'ranged', 'magic', 'aoe', 'area', 'buff', 'heal', 'spring', 'dash', 'back'];
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const d2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -63,6 +64,8 @@ export class Game {
         this.drops = [];
         this.shots = [];
         this.ship = null;
+        this.springs = [];
+        this.frameNo = 0;
         this.spawnAll();
         if (opts.save) this.load(opts.save);
     }
@@ -70,17 +73,17 @@ export class Game {
     newHero(x, y, z) {
         const quests = {};
         for (const [id, q] of Object.entries(QUESTS)) quests[id] = { state: 'locked', n: 0 };
-        for (const id of ['crabs', 'fish', 'herbs', 'ore', 'salvage', ...(this.gen.questStart ?? [])]) if (quests[id]) quests[id].state = 'available';
+        for (const id of ['crabs', 'classes', 'fish', 'herbs', 'ore', 'salvage', ...(this.gen.questStart ?? [])]) if (quests[id]) quests[id].state = 'available';
         const profs = {};
         for (const id of Object.keys(PROFS)) profs[id] = { lvl: 1, xp: 0, known: id === 'craft' };
         const h = {
             body: new Body(x, y, z), lvl: 1, xp: 0, gold: 25, cls: 'novice', classes: ['novice'],
-            base: { str: 5, agi: 5, acc: 5, con: 5, spr: 5 }, points: 0,
+            base: { str: 5, acc: 5, agi: 5, con: 5, spr: 5, luk: 5 }, points: 4, tp: 0, sk: { strike: 1 },
             equip: { weapon: { id: 'rusty_saber', up: 0 }, armor: { id: 'canvas_jacket', up: 0 }, ring: null },
             inv: [{ id: 'potion_s', n: 3 }], cds: {}, buffs: [], target: null, engaged: false, atkT: 0,
             profs, quests, compass: false, hasShip: false, sailing: false, combat: 99, dead: 0,
             path: null, pathI: 0, act: null, queued: null, walk: 0, attackT: 0, castT: 0, hurt: 0, flash: 0, face: 0,
-            kills: {}, visited: { wharf: true }, bar: ['strike', 'firstaid', null, null, null, null, 'potion_s', 'mana_s'],
+            kills: {}, visited: { wharf: true }, bar: ['strike', null, null, null, null, null, 'potion_s', 'mana_s'],
         };
         h.hp = this.maxHp(h);
         h.mp = this.maxMp(h);
@@ -91,60 +94,70 @@ export class Game {
     log(text, kind = 'info') { this.emit({ type: 'log', text, kind }); }
 
     // ---------------------------------------------------------- derived stats
-    stat(h, k) {
-        let v = h.base[k];
-        for (const slot of ['weapon', 'armor', 'ring']) {
-            const e = h.equip[slot];
-            if (e && ITEMS[e.id].bonus?.[k]) v += ITEMS[e.id].bonus[k];
-        }
-        return v;
+    // everything the rules compute, cached per frame
+    d(h = this.hero) {
+        const key = `${this.frameNo}|${h.lvl}|${h.buffs.length}`;
+        if (h._d && h._dk === key && !h._dirty) return h._d;
+        h._d = derive(h, ITEMS, this.weapon(h));
+        h._dk = key;
+        h._dirty = false;
+        return h._d;
     }
+
+    stat(h, k) { return this.d(h).st[k]; }
 
     buff(h, k) {
-        let v = 0;
-        for (const b of h.buffs) if (b[k]) v += b[k];
-        return v;
+        let t = 0;
+        for (const b of h.buffs) if (b.mods?.[k]) t += b.mods[k];
+        return t;
     }
 
-    maxHp(h) { return Math.round(90 + h.lvl * 16 + this.stat(h, 'con') * 11); }
-    maxMp(h) { return Math.round(30 + h.lvl * 5 + this.stat(h, 'spr') * 7); }
+    maxHp(h) { return derive(h, ITEMS, this.weapon(h)).maxHp; }
+    maxMp(h) { return derive(h, ITEMS, this.weapon(h)).maxSp; }
 
-    weapon(h = this.hero) { const e = h.equip.weapon; return e ? { ...ITEMS[e.id], up: e.up } : { type: 'fist', atk: 3, speed: 1, up: 0 }; }
+    weapon(h = this.hero) { const e = h.equip.weapon; return e ? { ...ITEMS[e.id], up: e.up } : { type: 'fist', atk: [2, 3], speed: 1, up: 0 }; }
 
-    // physical or magical power of a basic attack
-    power(h = this.hero) {
-        const w = this.weapon(h);
-        const up = 1 + (w.up ?? 0) * 0.08;
-        const mul = 1 + this.buff(h, 'atk');
-        if (w.type === 'bow') return (w.atk * up + this.stat(h, 'acc') * 1.5 + this.stat(h, 'agi') * 0.4 + h.lvl) * mul;
-        if (w.type === 'staff' || w.type === 'censer') return ((w.matk ?? 0) * up + this.stat(h, 'spr') * 1.8 + h.lvl) * mul;
-        return (w.atk * up + this.stat(h, 'str') * 1.6 + h.lvl) * mul;
-    }
-
-    magic(h = this.hero) {
-        const w = this.weapon(h);
-        return ((w.matk ?? w.atk * 0.5) * (1 + (w.up ?? 0) * 0.08) + this.stat(h, 'spr') * 1.8 + h.lvl) * (1 + this.buff(h, 'atk'));
-    }
-
-    defense(h = this.hero) {
-        const a = h.equip.armor;
-        return (a ? ITEMS[a.id].def * (1 + a.up * 0.08) : 0) + this.stat(h, 'con') * 0.8;
-    }
-
-    hitRate(h = this.hero) { return 88 + this.stat(h, 'acc') * 0.7 + h.lvl * 0.5; }
-    dodge(h = this.hero) { return this.stat(h, 'agi') * 0.7 + this.buff(h, 'dodge'); }
-    critRate(h = this.hero) { return 4 + this.stat(h, 'acc') * 0.25 + this.stat(h, 'agi') * 0.1; }
+    // a blow's attack value: a roll between min and max
+    power(h = this.hero) { const d = this.d(h); return d.atkMin + this.rng() * (d.atkMax - d.atkMin); }
+    magic(h = this.hero) { return this.d(h).matk; }
+    defense(h = this.hero) { return this.d(h).def; }
+    hitRate(h = this.hero) { return this.d(h).hit; }
+    dodge(h = this.hero) { return this.d(h).flee; }
+    critRate(h = this.hero) { return this.d(h).crit; }
     range(h = this.hero) { const w = this.weapon(h); return w.range ?? 1.7; }
-    interval(h = this.hero) { return (this.weapon(h).speed * 1.25) / (1 + this.stat(h, 'agi') * 0.012 + this.buff(h, 'haste')); }
+    interval(h = this.hero) { return this.d(h).aspd; }
 
-    // skills this hero knows now
+    // active skills this hero has learned
     skills(h = this.hero) {
-        const out = [];
-        for (const c of h.classes) {
-            const cl = CLASSES[c];
-            cl.skills.forEach((s, i) => { if (h.lvl >= (SKILLS[s].lvl ?? SKILL_LEVELS[cl.tier][i] ?? 1)) out.push(s); });
+        return Object.entries(h.sk).filter(([id, l]) => l > 0 && SKILLS[id] && ACTIVE_KINDS.includes(SKILLS[id].kind)).map(([id]) => id);
+    }
+
+    skillLevel(id, h = this.hero) { return h.sk[id] ?? 0; }
+
+    // can this skill take one more point now? returns a reason or null
+    canLearn(id, h = this.hero) {
+        const s = SKILLS[id];
+        if (!s) return 'Нет такого навыка.';
+        if (!h.classes.includes(s.cls)) return `Нужен класс: ${CLASSES[s.cls].name}.`;
+        if ((h.sk[id] ?? 0) >= MAX_SKILL) return 'Навык на пределе.';
+        for (const [rid, rl] of s.req ?? []) if ((h.sk[rid] ?? 0) < rl) return `Сначала: ${SKILLS[rid].name} ${rl}.`;
+        if (h.tp <= 0) return 'Нет очков навыков.';
+        return null;
+    }
+
+    learnSkill(id) {
+        const h = this.hero;
+        const why = this.canLearn(id);
+        if (why) { this.log(why, 'warn'); return false; }
+        h.tp--;
+        h.sk[id] = (h.sk[id] ?? 0) + 1;
+        h._dirty = true;
+        if (h.sk[id] === 1 && ACTIVE_KINDS.includes(SKILLS[id].kind) && !h.bar.includes(id)) {
+            const f = h.bar.indexOf(null);
+            if (f >= 0) h.bar[f] = id;
         }
-        return out;
+        this.emit({ type: 'skillup', id, lvl: h.sk[id] });
+        return true;
     }
 
     // ---------------------------------------------------------- inventory
@@ -201,6 +214,7 @@ export class Game {
         const old = h.equip[slot];
         h.equip[slot] = { id: it.id, up: it.up ?? 0 };
         h.inv.splice(index, 1);
+        h._dirty = true;
         if (old) h.inv.push({ id: old.id, n: 1, up: old.up });
         h.hp = Math.min(h.hp, this.maxHp(h));
         h.mp = Math.min(h.mp, this.maxMp(h));
@@ -214,6 +228,9 @@ export class Game {
         if (!e || h.inv.length >= INV_SIZE) return;
         h.inv.push({ id: e.id, n: 1, up: e.up });
         h.equip[slot] = null;
+        h._dirty = true;
+        h.hp = Math.min(h.hp, this.maxHp(h));
+        h.mp = Math.min(h.mp, this.maxMp(h));
         this.emit({ type: 'look' });
     }
 
@@ -225,7 +242,11 @@ export class Game {
         if ((h.cds['item:' + id] ?? 0) > 0) return;
         if (d.heal) { h.hp = Math.min(this.maxHp(h), h.hp + d.heal); this.emit({ type: 'fx', kind: 'heal', x: h.body.x, y: h.body.y, z: h.body.z + 0.5 }); this.emit({ type: 'num', x: h.body.x, y: h.body.y, z: h.body.z + 1.6, text: '+' + d.heal, kind: 'heal' }); }
         if (d.mana) h.mp = Math.min(this.maxMp(h), h.mp + d.mana);
-        if (d.food) h.buffs.push({ id: 'food', t: d.food.dur, name: d.name, ...d.food });
+        if (d.food) {
+            h.buffs = h.buffs.filter((b) => b.id !== 'food');
+            h.buffs.push({ id: 'food', t: d.food.dur, name: d.name, mods: { atkPct: d.food.atk ?? 0, hpRegen: d.food.regen ?? 0 } });
+            h._dirty = true;
+        }
         if (d.hull) {
             if (!this.ship) { this.log('Нечего чинить.', 'warn'); return; }
             this.ship.hull = Math.min(this.ship.max, this.ship.hull + d.hull);
@@ -262,14 +283,16 @@ export class Game {
         if (h.points <= 0 || !(k in h.base)) return;
         h.points--;
         h.base[k]++;
+        h._dirty = true;
     }
 
+    // spend the free points the way the class leans
     autoPoints() {
         const h = this.hero;
-        const g = CLASSES[h.cls].growth;
-        const keys = Object.keys(g).length ? Object.keys(g) : ['str', 'con', 'agi', 'acc'];
+        const keys = CLASSES[h.cls].hint ?? ['con', 'str'];
         let i = 0;
-        while (h.points > 0) { h.base[keys[i % keys.length]]++; h.points--; i++; }
+        while (h.points > 0) { h.base[keys[i % 3 === 2 ? 1 : 0]]++; h.points--; i++; }
+        h._dirty = true;
     }
 
     gainXp(n) {
@@ -279,19 +302,18 @@ export class Game {
         while (h.xp >= XP_TO(h.lvl)) {
             h.xp -= XP_TO(h.lvl);
             h.lvl++;
-            h.points += POINTS_PER_LEVEL;
-            for (const [k, v] of Object.entries(CLASSES[h.cls].growth)) h.base[k] += v;
+            const ap = apFor(h.lvl);
+            const tp = tpFor(h.lvl);
+            h.points += ap;
+            h.tp += tp;
+            h._dirty = true;
             h.hp = this.maxHp(h);
             h.mp = this.maxMp(h);
             this.emit({ type: 'level', lvl: h.lvl });
             this.emit({ type: 'fx', kind: 'level', x: h.body.x, y: h.body.y, z: h.body.z });
-            this.log(`Уровень ${h.lvl}! Очки характеристик: +${POINTS_PER_LEVEL}.`, 'good');
-            const fresh = this.skills().filter((s) => !h.bar.includes(s));
-            for (const s of fresh) {
-                const free = h.bar.indexOf(null);
-                if (free >= 0) h.bar[free] = s;
-                this.log(`Новый навык: ${SKILLS[s].name}.`, 'good');
-            }
+            this.log(`Уровень ${h.lvl}! Очки характеристик +${ap}${tp ? `, очки навыков +${tp}` : ''}.`, 'good');
+            const cl = CLASSES[h.cls];
+            if (cl.next && h.lvl === cl.nextLevel) this.log(`Открыт выбор пути: ${cl.next.map((c) => CLASSES[c].name).join(', ')}.`, 'quest');
         }
         this.refreshQuests();
     }
@@ -313,17 +335,20 @@ export class Game {
         if (!cur.next?.includes(id) || h.lvl < cur.nextLevel) return false;
         h.cls = id;
         h.classes.push(id);
+        h._dirty = true;
         const w = STARTER[id];
         if (w) {
             this.give(w, 1, true);
             const idx = h.inv.findIndex((i) => i.id === w);
             if (idx >= 0 && !this.canEquip(w)) this.equip(idx);
         }
-        for (const s of this.skills()) if (!h.bar.includes(s)) { const f = h.bar.indexOf(null); if (f >= 0) h.bar[f] = s; }
+        // a first point in the class's opening skill, as a welcome
+        const first = CLASSES[id].skills.find((sid) => !(SKILLS[sid].req?.length));
+        if (first && !h.sk[first]) { h.sk[first] = 1; if (ACTIVE_KINDS.includes(SKILLS[first].kind)) { const f = h.bar.indexOf(null); if (f >= 0) h.bar[f] = first; } }
         this.emit({ type: 'class', cls: id });
         this.emit({ type: 'look' });
         this.emit({ type: 'fx', kind: 'level', x: h.body.x, y: h.body.y, z: h.body.z });
-        this.log(`Теперь ты — ${CLASSES[id].name}.`, 'good');
+        this.log(`Теперь ты — ${CLASSES[id].name}. Навыки класса ждут очков в окне навыков (K).`, 'good');
         return true;
     }
 
@@ -453,11 +478,12 @@ export class Game {
         const m = old ?? { id: this.uid++ };
         Object.assign(m, {
             kind: s.kind, def, lvl, st, hp: st.hp, max: st.hp, spawn: si, home: { x: c[0], y: c[1], z: c[2] },
-            state: 'idle', target: null, atkT: 1, stun: 0, root: 0, weaken: 0, dots: [], hurt: 0, flash: 0, attackT: 0,
+            state: 'idle', target: null, atkT: 1, stun: 0, root: 0, disarm: 0, debuffs: [], dots: [], hurt: 0, flash: 0, attackT: 0,
             wait: this.rng() * 4, goal: null, stuck: 0, path: null, dead: 0, fleeT: 0, walk: 0, speed: 0, slamT: 6, face: this.rng() * 6.28,
         });
         m.body = new Body(c[0], c[1], c[2]);
         m.body.speedMul = def.speed / 4.6;
+        m.baseSpeed = m.body.speedMul;
         m.sea = !!def.sea;
         if (!old) this.mobs.push(m);
         return m;
@@ -705,7 +731,7 @@ export class Game {
         const s = this.ship;
         const h = this.hero;
         const want = Math.hypot(input.mx ?? 0, input.my ?? 0);
-        const max = 7.5 * (1 + this.buff(h, 'ship'));
+        const max = 7.5 * (1 + this.d(h).shipSpeed);
         if (want > 0.1) {
             const a = Math.atan2(input.my, input.mx);
             let d = a - s.face;
@@ -732,14 +758,22 @@ export class Game {
         const t = this.targetMob();
         if (t && h.engaged && s.atkT <= 0 && d2(t.body, s) < 10) {
             s.atkT = 1.6;
-            const dmg = (16 + h.lvl * 4) * (1 + this.buff(h, 'atk'));
-            this.fire({ x: s.x, y: s.y, z: s.z + 0.8 }, t, dmg, 'ball', 'hero');
+            // cannons: the ship's own weight of shot, a little of the captain's arm
+            const d = this.d(h);
+            const power = (16 + h.lvl * 4) * (1 + d.mod.atkPct) + (d.atkMin + d.atkMax) * 0.15;
+            this.fire({ x: s.x, y: s.y, z: s.z + 0.8 }, t, 0, 'ball', 'hero', { onHit: (m) => this.damageMob(m, this.cannon(m, power)) });
             this.emit({ type: 'fx', kind: 'dust', x: s.x, y: s.y, z: s.z + 0.8 });
         }
     }
 
+    // a cannonball: sure to hit, armour counts, no crits
+    cannon(m, power) {
+        return { dmg: damage(power * (0.9 + this.rng() * 0.2), m.st.def, 0, this.hero.lvl, m.lvl) };
+    }
+
     shipHit(dmg) {
         const s = this.ship;
+        dmg = Math.max(1, Math.round(dmg * (1 - Math.min(0.6, this.d().shipDef))));
         s.hull -= dmg;
         this.emit({ type: 'num', x: s.x, y: s.y, z: s.z + 2, text: '-' + Math.round(dmg), kind: 'ship' });
         if (s.hull <= 0) {
@@ -754,21 +788,51 @@ export class Game {
     }
 
     // ---------------------------------------------------------- combat
-    roll(att, target) {
-        // att: { power, hit, crit } ; target: { def, dodge }
-        const hit = clamp(att.hit - target.dodge, 45, 98);
-        if (this.rng() * 100 > hit) return { miss: true, dmg: 0 };
-        const crit = this.rng() * 100 < att.crit;
-        const raw = att.power * (0.88 + this.rng() * 0.24) * (crit ? 1.8 : 1);
-        return { dmg: Math.max(1, Math.round((raw * 60) / (60 + target.def))), crit };
+    // the sum of one kind of debuff on a creature
+    mobMod(m, k) {
+        let t = 0;
+        for (const d of m.debuffs) if (d.mods[k]) t += d.mods[k];
+        return t;
     }
 
-    heroAtt(mult = 1, magic = false) {
+    // slows do not stack: the strongest wins
+    mobSlow(m) {
+        let s = 1;
+        for (const d of m.debuffs) if (d.mods.slow) s = Math.min(s, d.mods.slow);
+        return s;
+    }
+
+    debuffMob(m, id, mods, lvl, dur) {
+        const d = { id, t: dur, mods: {} };
+        for (const [k, x] of Object.entries(mods)) d.mods[k] = v(x, lvl);
+        m.debuffs = m.debuffs.filter((x) => x.id !== id);
+        m.debuffs.push(d);
+    }
+
+    // one blow from the hero: magic never misses, the rest can
+    strike(m, { mult = 1, magic = false, ignoreDef = false } = {}) {
         const h = this.hero;
-        return { power: (magic ? this.magic() : this.power()) * mult, hit: this.hitRate(), crit: this.critRate() };
+        // a blow gives away the one who struck it
+        if (h.buffs.some((x) => x.mods?.hidden)) { h.buffs = h.buffs.filter((x) => !x.mods?.hidden); h._dirty = true; }
+        const d = this.d(h);
+        const flee = m.st.flee * Math.max(0, 1 + this.mobMod(m, 'fleePct'));
+        if (!magic && this.rng() < missChance(d.hit, flee)) return { miss: true, dmg: 0 };
+        const crit = this.rng() < critChance(d.crit, h.lvl, m.lvl);
+        const atk = (magic ? d.matk * (0.92 + this.rng() * 0.16) : this.power(h)) * mult * (crit ? 2 : 1);
+        const def = ignoreDef ? 0 : m.st.def * Math.max(0, 1 + this.mobMod(m, 'defPct'));
+        return { dmg: damage(atk, def, 0, h.lvl, m.lvl), crit };
     }
 
-    mobDef(m) { return { def: m.st.def * (1 - m.weaken), dodge: m.st.dodge }; }
+    // one blow from a creature at the hero
+    mobBlow(m) {
+        const h = this.hero;
+        const d = this.d(h);
+        if (this.rng() < missChance(m.st.hit, d.flee)) return { miss: true, dmg: 0 };
+        const crit = this.rng() < critChance(m.st.crit, m.lvl, h.lvl);
+        const [a, b] = m.st.atk;
+        const atk = (a + this.rng() * (b - a)) * Math.max(0.1, 1 + this.mobMod(m, 'atkPct')) * (crit ? 2 : 1);
+        return { dmg: damage(atk, d.def, 0, m.lvl, h.lvl), crit };
+    }
 
     damageMob(m, r, src = 'hero') {
         if (m.dead) return;
@@ -777,9 +841,9 @@ export class Game {
         m.hp -= r.dmg;
         m.hurt = 0.25;
         m.flash = 0.6;
-        this.emit({ type: 'num', x: b.x, y: b.y, z: b.z + 1.4, text: String(r.dmg), kind: r.crit ? 'crit' : 'dmg' });
-        this.emit({ type: 'fx', kind: r.crit ? 'crit' : 'hit', x: b.x, y: b.y, z: b.z + 0.6 });
-        if (src === 'hero') {
+        this.emit({ type: 'num', x: b.x, y: b.y, z: b.z + 1.4, text: String(r.dmg), kind: r.crit ? 'crit' : src === 'dot' ? 'dot' : 'dmg' });
+        if (src !== 'dot') this.emit({ type: 'fx', kind: r.crit ? 'crit' : 'hit', x: b.x, y: b.y, z: b.z + 0.6 });
+        if (src === 'hero' || src === 'dot') {
             this.hero.combat = 0;
             if (m.def.temper === 'timid') { m.state = 'flee'; m.fleeT = 3; }
             else if (m.state !== 'chase') { m.state = 'chase'; m.target = 'hero'; }
@@ -793,7 +857,10 @@ export class Game {
         m.dead = 0.001;
         m.state = 'dead';
         m.back = m.def.boss ? 120 : 25 + this.rng() * 15;
+        m.debuffs = [];
+        m.dots = [];
         const b = m.body;
+        // far weaker creatures teach little; a little stronger ones teach more
         const diff = m.lvl - h.lvl;
         const xp = Math.round(m.st.xp * clamp(1 + diff * 0.1, 0.1, 1.5));
         this.gainXp(xp);
@@ -806,10 +873,11 @@ export class Game {
                 this.log(`${q.name}: ${s.n}/${q.count}`, 'quest');
             }
         }
-        // loot falls to the ground; quest items only drop while the quest needs them
+        // loot falls to the ground; quest items only drop while the quest needs them; luck widens the odds
+        const mf = this.d(h).mf / 100;
         const bag = [];
         for (const [id, p] of m.def.loot) {
-            let chance = p;
+            let chance = p * mf;
             if (ITEMS[id].slot === 'quest') {
                 const q = Object.entries(QUESTS).find(([qid, qq]) => qq.item === id && ['active', 'ready'].includes(h.quests[qid].state));
                 chance = q ? Math.max(p, id === 'chart' ? 0.35 : p) : 0;
@@ -833,20 +901,33 @@ export class Game {
         this.emit({ type: 'fx', kind: 'coin', x: d.x, y: d.y, z: d.z + 0.3 });
     }
 
-    damageHero(dmg, from) {
+    damageHero(dmg, from, crit = false) {
         const h = this.hero;
         if (h.dead) return;
+        // a shield takes the blow first, then the spirit takes its share
         const sh = h.buffs.find((b) => b.shield > 0);
-        if (sh) { const k = Math.min(sh.shield, dmg); sh.shield -= k; dmg -= k; }
-        dmg = Math.round(dmg);
+        if (sh) { const k = Math.min(sh.shield, dmg); sh.shield -= k; dmg -= k; if (sh.shield <= 0) sh.t = 0; }
+        const toSp = this.buff(h, 'dmgToSp');
+        if (toSp > 0 && dmg > 0) { const k = Math.min(h.mp, Math.round(dmg * Math.min(0.8, toSp))); h.mp -= k; dmg -= k; }
+        dmg = Math.max(0, Math.round(dmg));
         h.hp -= dmg;
         h.combat = 0;
         h.hurt = 0.25;
         h.flash = 0.5;
         this.cancelAct();
-        this.emit({ type: 'num', x: h.body.x, y: h.body.y, z: h.body.z + 1.8, text: '-' + dmg, kind: 'hurt' });
+        this.emit({ type: 'num', x: h.body.x, y: h.body.y, z: h.body.z + 1.8, text: dmg ? '-' + dmg : 'щит', kind: crit ? 'crit' : 'hurt' });
         this.emit({ type: 'hurt' });
         if (!h.target && from) h.target = from.id;
+        // second wind: once, at the edge
+        const sw = h.buffs.find((b) => b.mods?.secondWind);
+        const mh = this.maxHp(h);
+        if (sw && h.hp > 0 && h.hp < mh * 0.2) {
+            const n = Math.round(mh * sw.mods.secondWind);
+            h.hp = Math.min(mh, h.hp + n);
+            sw.t = 0;
+            this.emit({ type: 'fx', kind: 'heal', x: h.body.x, y: h.body.y, z: h.body.z + 0.3 });
+            this.emit({ type: 'num', x: h.body.x, y: h.body.y, z: h.body.z + 2.2, text: '+' + n, kind: 'heal' });
+        }
         if (h.hp <= 0) this.heroDies();
     }
 
@@ -857,8 +938,12 @@ export class Game {
         h.engaged = false;
         h.target = null;
         h.path = null;
-        if (h.lvl >= 5) h.xp = Math.max(0, h.xp - Math.round(XP_TO(h.lvl) * 0.03));
-        this.log('Ты пал. Ветер вернёт тебя к берегу…', 'bad');
+        h.buffs = [];
+        h._dirty = true;
+        // from the tenth level a death costs a sliver of the level
+        let lost = 0;
+        if (h.lvl >= FIRST_CLASS_LEVEL) { lost = Math.min(h.xp, Math.round(XP_TO(h.lvl) * 0.02)); h.xp -= lost; }
+        this.log(`Ты пал${lost ? ` и потерял ${lost} оп` : ''}. Ветер вернёт тебя к берегу…`, 'bad');
         this.emit({ type: 'death' });
     }
 
@@ -878,12 +963,14 @@ export class Game {
     }
 
     // ---------------------------------------------------------- skills
+    skillCost(id, h = this.hero) { return Math.round(v(SKILLS[id].mp, Math.max(1, h.sk[id] ?? 1))); }
+
     useSkill(id) {
         const h = this.hero;
         const s = SKILLS[id];
         if (!s || h.dead || !this.skills().includes(id)) return false;
         if ((h.cds[id] ?? 0) > 0) { this.log(`${s.name}: перезарядка.`, 'warn'); return false; }
-        if (h.mp < s.mp) { this.log('Не хватает духа.', 'warn'); return false; }
+        if (h.mp < this.skillCost(id)) { this.log('Не хватает духа.', 'warn'); return false; }
         const needsTarget = ['melee', 'ranged', 'magic', 'area', 'dash'].includes(s.kind);
         const t = this.targetMob();
         if (needsTarget && !t) { this.log('Нет цели.', 'warn'); return false; }
@@ -903,57 +990,80 @@ export class Game {
     cast(id, t) {
         const h = this.hero;
         const s = SKILLS[id];
+        const lvl = Math.max(1, h.sk[id] ?? 1);
         const b = h.body;
-        h.mp -= s.mp;
+        h.mp -= this.skillCost(id);
         h.cds[id] = s.cd;
         h.queued = null;
         h.castT = 0.4;
         h.combat = Math.min(h.combat, 0);
         if (t) h.face = Math.atan2(t.body.y - b.y, t.body.x - b.x);
-        const magic = s.kind === 'magic' || s.magic;
-        const att = this.heroAtt(s.mult ?? 1, magic);
+        const magic = s.kind === 'magic' || !!s.magic;
+        const mult = v(s.mult, lvl);
+        const opt = { mult: mult || 1, magic, ignoreDef: !!s.ignoreDef };
         const at = { x: b.x, y: b.y, z: b.z + 0.9 };
         this.emit({ type: 'skill', id, x: b.x, y: b.y, z: b.z, tx: t?.body.x, ty: t?.body.y, tz: t?.body.z });
-        const apply = (m) => {
-            const r = this.roll(att, this.mobDef(m));
-            this.damageMob(m, r);
+        // what a hit does: the blow, then the effects that ride on it
+        const apply = (m, hits = 1) => {
+            if (m.dead) return;
+            let r = { dmg: 0 };
+            if (mult > 0) {
+                for (let i = 0; i < hits && !m.dead; i++) { r = this.strike(m, opt); this.damageMob(m, r); }
+            } else if (m.state !== 'chase' && m.def.temper !== 'timid') { m.state = 'chase'; m.target = 'hero'; }
             if (r.miss || m.dead) return;
-            if (s.stun) m.stun = s.stun;
-            if (s.root) m.root = s.root;
-            if (s.weaken) { m.weaken = s.weaken; m.weakT = s.dur; }
-            if (s.dot) m.dots.push({ dmg: Math.max(1, Math.round((magic ? this.magic() : this.power()) * s.dot.mult * 60 / (60 + m.st.def))), n: s.dot.ticks, t: 1 });
-            if (s.knock) { const a = Math.atan2(m.body.y - b.y, m.body.x - b.x); m.body.vx += Math.cos(a) * s.knock * 3; m.body.vy += Math.sin(a) * s.knock * 3; m.body.vz = 4; }
-            if (s.pull && t) { const a = Math.atan2(t.body.y - m.body.y, t.body.x - m.body.x); m.body.vx += Math.cos(a) * 5; m.body.vy += Math.sin(a) * 5; }
+            if (s.stun) m.stun = Math.max(m.stun, v(s.stun, lvl));
+            if (s.root) m.root = Math.max(m.root, v(s.root, lvl));
+            if (s.disarm) m.disarm = Math.max(m.disarm, v(s.disarm, lvl));
+            if (s.debuff) this.debuffMob(m, id, s.debuff, lvl, v(s.dur, lvl) || 6);
+            if (s.dot) {
+                const base = magic ? this.magic() : this.power();
+                const tick = damage(base * v(s.dot, lvl), m.st.def * 0.5, 0, h.lvl, m.lvl);
+                m.dots = m.dots.filter((d) => d.id !== id);
+                m.dots.push({ id, dmg: tick, n: s.ticks ?? 5, t: 1 });
+            }
+            if (s.taunt) { m.state = 'chase'; m.target = 'hero'; m.atkT = Math.min(m.atkT, 0.4); }
         };
         switch (s.kind) {
-            case 'melee': h.attackT = 0.35; apply(t); break;
-            case 'ranged': for (let i = 0; i < (s.hits ?? 1); i++) this.fire(at, t, 0, 'arrow', 'hero', { delay: i * 0.12, onHit: apply }); break;
-            case 'magic': this.fire(at, t, 0, s.fx, 'hero', { onHit: apply }); break;
+            case 'melee': h.attackT = 0.35; apply(t, s.hits ?? 1); break;
+            case 'ranged':
+                for (let i = 0; i < (s.hits ?? 1); i++) this.fire(at, t, 0, s.proj ?? 'arrow', 'hero', { delay: i * 0.14, onHit: (m) => apply(m) });
+                break;
+            case 'magic': this.fire(at, t, 0, s.proj ?? 'bolt', 'hero', { onHit: (m) => apply(m) }); break;
             case 'aoe':
                 h.attackT = 0.35;
                 for (const m of this.mobs) if (!m.dead && d2(m.body, b) < s.radius && Math.abs(m.body.z - b.z) < 2.5) apply(m);
-                this.emit({ type: 'fx', kind: 'ring', x: b.x, y: b.y, z: b.z + 0.1, r: s.radius, color: magic ? 0x8fd8ff : 0xffffff });
+                this.emit({ type: 'fx', kind: 'ring', x: b.x, y: b.y, z: b.z + 0.1, r: s.radius, color: s.fx === 'fog' ? 0xd8e4e0 : magic ? 0x8fd8ff : 0xffffff });
                 break;
             case 'area': {
                 const c = { x: t.body.x, y: t.body.y, z: t.body.z };
                 this.emit({ type: 'fx', kind: 'ring', x: c.x, y: c.y, z: c.z + 0.1, r: s.radius, color: magic ? 0x8fd8ff : 0xffd24a });
-                for (const m of this.mobs) if (!m.dead && d2(m.body, c) < s.radius) apply(m);
+                for (const m of this.mobs) if (!m.dead && d2(m.body, c) < s.radius && Math.abs(m.body.z - c.z) < 3) apply(m);
                 break;
             }
-            case 'self': {
-                const buff = { id, t: s.dur, name: s.name, ...s.buff };
-                if (buff.shieldSpr) buff.shield = s.buff.shield + this.stat(h, 'spr') * s.buff.shieldSpr;
+            case 'buff': {
+                const buff = { id, t: v(s.dur, lvl), name: s.name, mods: {} };
+                for (const [k, x] of Object.entries(s.mods)) {
+                    if (k === 'shield') buff.shield = Math.round(v(x, lvl) + this.stat(h, 'spr') * (s.shieldSpr ?? 0));
+                    else buff.mods[k] = v(x, lvl);
+                }
                 h.buffs = h.buffs.filter((x) => x.id !== id);
                 h.buffs.push(buff);
+                h._dirty = true;
                 this.emit({ type: 'fx', kind: s.fx === 'heal' ? 'heal' : 'magic', x: b.x, y: b.y, z: b.z + 0.6, color: 0xffd24a });
-                if (buff.hidden) for (const m of this.mobs) if (m.target === 'hero') { m.state = 'return'; m.target = null; }
+                if (buff.mods.hidden) for (const m of this.mobs) if (m.target === 'hero') { m.state = 'return'; m.target = null; }
                 break;
             }
             case 'heal': {
-                const n = Math.round(s.healPct ? this.maxHp(h) * s.healPct : s.heal + this.stat(h, 'spr') * s.healSpr);
+                const n = Math.round(v(s.heal, lvl) + this.stat(h, 'spr') * (s.healSpr ?? 0));
                 h.hp = Math.min(this.maxHp(h), h.hp + n);
                 this.emit({ type: 'fx', kind: 'heal', x: b.x, y: b.y, z: b.z + 0.3 });
                 this.emit({ type: 'num', x: b.x, y: b.y, z: b.z + 1.8, text: '+' + n, kind: 'heal' });
+                break;
+            }
+            case 'spring': {
+                const n = Math.round(v(s.heal, lvl) + this.stat(h, 'spr') * (s.healSpr ?? 0));
+                this.springs.push({ x: b.x, y: b.y, z: b.z, t: v(s.dur, lvl), tick: 0, heal: n, r: 3 });
+                this.emit({ type: 'fx', kind: 'ring', x: b.x, y: b.y, z: b.z + 0.1, r: 3, color: 0x7ff0a0 });
                 break;
             }
             case 'dash': {
@@ -979,6 +1089,23 @@ export class Game {
         this.emit({ type: 'fx', kind: 'magic', x: b.x, y: b.y, z: b.z + 1, color: CLASSES[h.cls].color ?? 0xffffff });
     }
 
+    // healing springs tick once a second on the hero standing in them
+    springFrame(dt) {
+        const h = this.hero;
+        for (const s of this.springs) {
+            s.t -= dt;
+            s.tick -= dt;
+            if (s.tick > 0) continue;
+            s.tick = 1;
+            this.emit({ type: 'fx', kind: 'heal', x: s.x, y: s.y, z: s.z + 0.1 });
+            if (!h.dead && !h.sailing && d2(h.body, s) < s.r && Math.abs(h.body.z - s.z) < 2) {
+                h.hp = Math.min(this.maxHp(h), h.hp + s.heal);
+                this.emit({ type: 'num', x: h.body.x, y: h.body.y, z: h.body.z + 1.8, text: '+' + s.heal, kind: 'heal' });
+            }
+        }
+        this.springs = this.springs.filter((s) => s.t > 0);
+    }
+
     nearestMob(r) {
         const b = this.hero.body;
         let best = null;
@@ -990,6 +1117,7 @@ export class Game {
     // input: { mx, my, jump }
     update(dt, input = {}) {
         dt = Math.min(dt, 0.05);
+        this.frameNo++;
         this.time += dt;
         this.day = (this.day + dt / DAY_LENGTH) % 1;
         const h = this.hero;
@@ -1000,7 +1128,9 @@ export class Game {
         h.combat += dt;
         for (const k of Object.keys(h.cds)) h.cds[k] = Math.max(0, h.cds[k] - dt);
         for (const b of h.buffs) b.t -= dt;
-        h.buffs = h.buffs.filter((b) => b.t > 0 && !(b.shield !== undefined && b.shield <= 0 && b.id === 'tideshield'));
+        const nb = h.buffs.length;
+        h.buffs = h.buffs.filter((b) => b.t > 0);
+        if (h.buffs.length !== nb) h._dirty = true;
 
         if (h.dead > 0) {
             h.dead -= dt;
@@ -1010,14 +1140,15 @@ export class Game {
 
         // regeneration: quick out of combat
         if (!h.dead) {
+            // the rules' recovery every second, and a sailor's rest out of a fight
+            const d = this.d(h);
             const out = h.combat > 5;
-            const mh = this.maxHp(h);
-            const mm = this.maxMp(h);
-            h.hp = Math.min(mh, h.hp + mh * ((out ? 0.035 : 0.004) + this.buff(h, 'regen')) * dt);
-            h.mp = Math.min(mm, h.mp + mm * (out ? 0.03 : 0.01) * dt);
+            h.hp = Math.min(d.maxHp, h.hp + (d.hrec * (out ? 3 : 1) + d.maxHp * (out ? 0.02 : 0) + d.maxHp * this.buff(h, 'hpRegen')) * dt);
+            h.mp = Math.min(d.maxSp, h.mp + (d.srec * (out ? 3 : 1) + d.maxSp * (out ? 0.015 : 0)) * dt);
         }
         this.mobFrame(dt);
         this.shotFrame(dt);
+        this.springFrame(dt);
         for (const n of this.nodes) if (!n.alive) { n.back -= dt; if (n.back <= 0) n.alive = true; }
         for (const d of this.drops) d.t -= dt;
         this.drops = this.drops.filter((d) => d.t > 0);
@@ -1067,6 +1198,7 @@ export class Game {
                 if (n.via === 'hop' && b.grounded && n.h * LAYER - b.z > 0.6) input = { ...input, jump: true };
             }
         }
+        b.speedMul = this.d(h).speed;
         const events = stepBody(this.w, b, { mx, my, jump: input.jump && !h.act }, dt, []);
         for (const e of events) {
             if (e.type === 'fall') { this.damageHero(Math.round((this.maxHp(h) * e.dmg) / 12)); this.emit({ type: 'fx', kind: 'dust', x: b.x, y: b.y, z: b.z }); }
@@ -1096,14 +1228,13 @@ export class Game {
         h.atkT = this.interval();
         const w = this.weapon();
         const b = h.body;
-        if (w.type === 'bow' || w.type === 'staff' || w.type === 'censer') {
-            const magic = w.type !== 'bow';
-            const att = this.heroAtt(magic ? 0.85 : 1, magic);
+        if (w.type === 'bow' || w.type === 'gun' || w.type === 'staff' || w.type === 'censer') {
+            const magic = w.type === 'staff' || w.type === 'censer';
             h.castT = 0.3;
-            this.fire({ x: b.x, y: b.y, z: b.z + 0.9 }, t, 0, magic ? 'bolt' : 'arrow', 'hero', { onHit: (m) => this.damageMob(m, this.roll(att, this.mobDef(m))) });
+            this.fire({ x: b.x, y: b.y, z: b.z + 0.9 }, t, 0, magic ? 'bolt' : w.type === 'gun' ? 'ball' : 'arrow', 'hero', { onHit: (m) => this.damageMob(m, this.strike(m, { mult: magic ? 0.85 : 1, magic })) });
         } else {
             h.attackT = 0.35;
-            this.damageMob(t, this.roll(this.heroAtt(), this.mobDef(t)));
+            this.damageMob(t, this.strike(t));
             this.emit({ type: 'swing' });
         }
     }
@@ -1163,7 +1294,9 @@ export class Game {
             m.attackT = Math.max(0, m.attackT - dt);
             m.stun = Math.max(0, m.stun - dt);
             m.root = Math.max(0, m.root - dt);
-            if (m.weaken > 0) { m.weakT -= dt; if (m.weakT <= 0) m.weaken = 0; }
+            m.disarm = Math.max(0, m.disarm - dt);
+            if (m.debuffs.length) { for (const d of m.debuffs) d.t -= dt; m.debuffs = m.debuffs.filter((d) => d.t > 0); }
+            b.speedMul = m.baseSpeed * this.mobSlow(m);
             for (const d of m.dots) {
                 d.t -= dt;
                 if (d.t <= 0 && d.n > 0) { d.t = 1; d.n--; this.damageMob(m, { dmg: d.dmg }, 'dot'); }
@@ -1188,7 +1321,7 @@ export class Game {
                 else {
                     m.face = Math.atan2(foe.y - b.y, foe.x - b.x);
                     m.atkT -= dt;
-                    if (m.atkT <= 0 && m.stun === 0) this.mobAttack(m, foe);
+                    if (m.atkT <= 0 && m.stun === 0 && m.disarm === 0) this.mobAttack(m, foe);
                 }
                 if (m.def.boss) {
                     m.slamT -= dt;
@@ -1196,12 +1329,12 @@ export class Game {
                         m.slamT = 7;
                         m.attackT = 0.6;
                         this.emit({ type: 'fx', kind: 'ring', x: b.x, y: b.y, z: b.z + 0.1, r: 3.2, color: 0x6ff5cf });
-                        if (dist < 3.2 && !h.sailing) this.damageHero((m.st.atk * 1.6 * 60) / (60 + this.defense()), m);
+                        if (dist < 3.2 && !h.sailing) this.damageHero(damage(m.st.atk[1] * 1.6, this.defense(), 0, m.lvl, h.lvl), m);
                     }
                 }
             } else if (m.state === 'return') {
                 goal = m.home;
-                if (Math.hypot(b.x - m.home.x, b.y - m.home.y) < 1) { m.state = 'idle'; m.hp = m.max; m.dots = []; }
+                if (Math.hypot(b.x - m.home.x, b.y - m.home.y) < 1) { m.state = 'idle'; m.hp = m.max; m.dots = []; m.debuffs = []; }
             } else if (m.state === 'flee') {
                 m.fleeT -= dt;
                 const a = Math.atan2(b.y - hb.y, b.x - hb.x);
@@ -1261,8 +1394,10 @@ export class Game {
         const h = this.hero;
         m.atkT = m.def.boss ? 1.5 : 1.7;
         m.attackT = 0.35;
-        const def = h.sailing ? 20 : this.defense();
-        const r = this.roll({ power: m.st.atk, hit: m.st.hit, crit: 3 }, { def, dodge: h.sailing ? 0 : this.dodge() });
+        // at sea the hull takes the blow: no dodging, the planks' own armour
+        const r = h.sailing
+            ? { dmg: damage((m.st.atk[0] + m.st.atk[1]) / 2 * Math.max(0.1, 1 + this.mobMod(m, 'atkPct')), 20, 0, m.lvl, h.lvl) }
+            : this.mobBlow(m);
         const b = m.body;
         if (m.def.ranged) {
             this.fire({ x: b.x, y: b.y, z: b.z + 1 }, h.sailing ? 'ship' : 'hero', r.dmg, m.sea ? 'ball' : 'bolt', 'mob', { miss: r.miss, from: m });
@@ -1270,7 +1405,7 @@ export class Game {
         }
         if (r.miss) { this.emit({ type: 'num', x: foe.x, y: foe.y, z: (foe.z ?? 0) + 1.8, text: 'уклон', kind: 'miss' }); return; }
         if (h.sailing) this.shipHit(r.dmg);
-        else this.damageHero(r.dmg, m);
+        else this.damageHero(r.dmg, m, r.crit);
     }
 
     shotFrame(dt) {
@@ -1293,7 +1428,7 @@ export class Game {
                 s.done = true;
                 if (s.side === 'hero') {
                     if (s.onHit) s.onHit(s.target);
-                    else this.damageMob(s.target, this.roll({ power: s.dmg, hit: 95, crit: 5 }, this.mobDef(s.target)));
+                    else this.damageMob(s.target, { dmg: Math.max(1, Math.round(s.dmg)) });
                 } else if (s.miss) this.emit({ type: 'num', x: tx, y: ty, z: tz + 1, text: 'мимо', kind: 'miss' });
                 else if (s.target === 'ship') this.shipHit(s.dmg);
                 else this.damageHero(s.dmg, s.from);
@@ -1311,16 +1446,17 @@ export class Game {
     save() {
         const h = this.hero;
         return {
-            v: 1, lvl: h.lvl, xp: h.xp, gold: h.gold, cls: h.cls, classes: h.classes, base: h.base, points: h.points,
+            v: 2, lvl: h.lvl, xp: h.xp, gold: h.gold, cls: h.cls, classes: h.classes, base: h.base, points: h.points, tp: h.tp, sk: h.sk,
             equip: h.equip, inv: h.inv, profs: h.profs, quests: h.quests, compass: h.compass, hasShip: h.hasShip, visited: h.visited,
             bar: h.bar, hp: h.hp, mp: h.mp, pos: [h.body.x, h.body.y, h.body.z], sailing: h.sailing, ship: this.ship, home: this.home, day: this.day, kills: h.kills,
         };
     }
 
     load(s) {
-        if (!s || s.v !== 1) return false;
+        if (!s || s.v !== 2) return false;
         const h = this.hero;
-        for (const k of ['lvl', 'xp', 'gold', 'cls', 'classes', 'base', 'points', 'equip', 'inv', 'compass', 'hasShip', 'visited', 'bar', 'kills']) if (s[k] !== undefined) h[k] = s[k];
+        for (const k of ['lvl', 'xp', 'gold', 'cls', 'classes', 'base', 'points', 'tp', 'sk', 'equip', 'inv', 'compass', 'hasShip', 'visited', 'bar', 'kills']) if (s[k] !== undefined) h[k] = s[k];
+        h._dirty = true;
         for (const [id, q] of Object.entries(s.quests ?? {})) if (h.quests[id]) h.quests[id] = q;
         for (const [id, p] of Object.entries(s.profs ?? {})) if (h.profs[id]) h.profs[id] = p;
         h.hp = Math.min(s.hp ?? this.maxHp(h), this.maxHp(h));
